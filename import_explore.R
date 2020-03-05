@@ -155,11 +155,28 @@ df_gross_sales_category2 %>%
   geom_col() +
   coord_flip()
 
+# 
+df_gross_sales_category2 %>%
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas), y = percent_notas,text = number_products,fill = review_simple)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
+            size = 3,
+            position = position_stack(vjust = 0.5)) +
+  coord_flip()
+
+
+
+
+
 df_gross_sales_category3 <- df_orders_itens_reviews_payments_products %>% 
   mutate(
     new_categories = case_when(
       product_category_name %in% c('cama_mesa_banho',
-                                   'beleza_saude',
+                                   'moveis_decoracao',
                                    'moveis_escritorio') ~ 'nova_casa',
       TRUE ~ product_category_name
     )) %>%
@@ -189,3 +206,176 @@ df_gross_sales_category4 %>%
 # fazer grafico por estado do nova_casa
 
 
+# graficos de pedidos -----------------------------------------------------
+
+df_gross_sales_category5 <- df_orders_itens_reviews_payments_products %>% 
+  mutate(
+    new_categories = case_when(
+      product_category_name %in% c('cama_mesa_banho',
+                                   'moveis_decoracao',
+                                   'moveis_escritorio') ~ 'nova_casa',
+      TRUE ~ product_category_name
+    ),
+    ) %>%
+  filter(new_categories == 'nova_casa') %>% 
+  group_by(order_id,review_simple) %>% 
+  summarise(total_gross_sale = sum(total_price,na.rm = T),
+            mean_price = mean(total_price,na.rm = T),
+            number_products = n()) %>%
+  mutate(bucket_itens = if_else(number_products >= 3,'3 ou mais',number_products %>% as.character())) %>% 
+  group_by(bucket_itens)
+
+df_gross_sales_category6 <- df_gross_sales_category5 %>% 
+  group_by(review_simple,bucket_itens) %>% 
+  summarise(number_products = n()) %>% 
+  group_by(bucket_itens) %>% 
+  mutate(percent_notas = number_products/sum(number_products))
+
+df_gross_sales_category6 %>%
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder2(bucket_itens,review_simple,-percent_notas), y = percent_notas,text = number_products,fill = review_simple)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
+            size = 3,
+            position = position_stack(vjust = 0.5)) +
+  coord_flip()
+
+blank_theme <- theme_minimal()+
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.border = element_blank(),
+    panel.grid=element_blank(),
+    axis.ticks = element_blank(),
+    plot.title=element_text(size=14, face="bold")
+  )
+
+df_gross_sales_category6 %>%
+  group_by(bucket_itens) %>% 
+  summarise(number_products = sum(number_products)) %>% 
+  ungroup() %>% 
+  mutate(percent_prod = number_products/sum(number_products)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = '',y = percent_prod,fill = bucket_itens)) +
+  geom_bar(position="fill", stat="identity") +
+  coord_flip() +
+  coord_polar("y", start=0) +
+  scale_alpha() +
+  theme(axis.text.x=element_blank()) +
+  blank_theme +
+  geom_text(aes(label = scales::percent(percent_prod,2)),
+            size = 3,
+            position = position_stack(vjust = 0.5))
+  
+
+# bucket valor compra -----------------------------------------------------
+
+df_gross_sales_order <- df_orders_itens_reviews_payments_products %>% 
+  mutate(
+    new_categories = case_when(
+      product_category_name %in% c('cama_mesa_banho',
+                                   'moveis_decoracao',
+                                   'moveis_escritorio') ~ 'nova_casa',
+      TRUE ~ product_category_name
+    ),
+  ) %>%
+  filter(new_categories == 'nova_casa') %>% 
+  group_by(order_id,review_simple) %>% 
+  summarise(total_price = sum(total_price)) %>% 
+  ungroup()
+  
+
+df_gross_sales_order %>%
+  skimr::skim()
+
+
+df_gross_sales_order %>% 
+  mutate(first_quantile = quantile(total_price,probs = .25),
+         second_quantile = quantile(total_price,probs = .50),
+         third_quantile = quantile(total_price,probs = .75))
+
+df_gross_sales_order_quantiles <- df_gross_sales_order %>% 
+  mutate(probabilidade_quantil = total_price %>% ntile(10000),
+  score = case_when(probabilidade_quantil < 2500 ~ 'first',
+                  probabilidade_quantil >= 2500 & probabilidade_quantil < 5000 ~ 'second',
+                  probabilidade_quantil >= 5000 & probabilidade_quantil < 7500 ~ 'third',
+                  probabilidade_quantil >= 7500 ~ 'fourth'))
+
+
+df_gross_sales_order_quantiles %>% 
+  group_by(score,review_simple) %>% 
+  summarise(n_orders = n(),
+            max_order = max(total_price)) %>% 
+  group_by(score) %>% 
+  mutate(prop = n_orders/sum(n_orders)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder2(score,review_simple,-prop), y = prop,fill = review_simple)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(prop,accuracy = 2)),
+            size = 3,
+            position = position_stack(vjust = 0.25)) +
+  geom_text(aes(label = n_orders),
+            size = 3,
+            position = position_stack(vjust = 0.5)) +
+  geom_text(aes(label = max_order),
+            size = 3,
+            position = position_stack(vjust = 0.75))
+
+# tentar heatplot
+
+
+# mapas -------------------------------------------------------------------
+
+
+df_casa_nova_cust <- df_orders_itens_reviews_payments_products %>% 
+  mutate(
+    new_categories = case_when(
+      product_category_name %in% c('cama_mesa_banho',
+                                   'moveis_decoracao',
+                                   'moveis_escritorio') ~ 'nova_casa',
+      TRUE ~ product_category_name
+    ),
+  ) %>%
+  filter(new_categories == 'nova_casa') %>% 
+  left_join(df_customer)
+
+df_casa_nova_cust %>% 
+  group_by(customer_state,review_simple) %>% 
+  summarise(n_orders = n()) %>% 
+  group_by(customer_state) %>% 
+  mutate(prop = n_orders/sum(n_orders)) %>%
+  ggplot(aes(x = fct_reorder2(customer_state,review_simple,-prop), y = prop,fill = review_simple)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(prop,accuracy = 2)),
+            size = 3,
+            position = position_stack(vjust = 0.25)) +
+  geom_text(aes(label = n_orders),
+            size = 3,
+            position = position_stack(vjust = 0.5))
+  
+
+df_casa_nova_cust %>% 
+  group_by(customer_state,review_simple) %>% 
+  summarise(n_orders = n()) %>% 
+  group_by(customer_state) %>% 
+  mutate(prop = n_orders/sum(n_orders)) %>%
+  ggplot(aes(x = fct_reorder2(customer_state,review_simple,-n_orders), y = n_orders,fill = review_simple)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(prop,accuracy = 2)),
+            size = 3,
+            position = position_stack(vjust = 0.25)) +
+  geom_text(aes(label = n_orders),
+            size = 3,
+            position = position_stack(vjust = 0.5))
+  
