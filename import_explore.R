@@ -260,11 +260,24 @@ df_gross_sales_category6 %>%
   mutate(percent_prod = number_products/sum(number_products)) %>% 
   ungroup() %>% 
   ggplot(aes(x = '',y = percent_prod,fill = bucket_itens)) +
-  geom_bar(position="fill", stat="identity") +
+  geom_bar(position="fill", stat="identity",color = 'white') +
+  coord_polar("y", start=0) + geom_text(aes(label = paste0(round(percent_prod*100), "%")),size =20, position = position_stack(vjust = 0.5)) +
+  labs(x = NULL, y = NULL, fill = NULL, title = "") +
+  theme_classic() + theme(axis.line = element_blank(),
+                            axis.text = element_blank(),
+                            axis.ticks = element_blank(),
+                            plot.title = element_text(hjust = 0.5, color = "#666666"))
+
+  
+
+  
+  
+  
+  
+  
   coord_flip() +
   coord_polar("y", start=0) +
   scale_alpha() +
-  theme(axis.text.x=element_blank()) +
   blank_theme +
   geom_text(aes(label = scales::percent(percent_prod,2)),
             size = 3,
