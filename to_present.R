@@ -193,4 +193,43 @@ br_maps <- brazilmaps::get_brmap("State")
 
 br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
+br_maps %>% as_tibble()
 
+
+br_maps_2 <- br_maps %>% 
+  mutate(Estado = nome %>% str_to_lower()) %>% 
+  left_join(br_sigla %>% mutate(Estado = Estado %>% str_to_lower),by = c("Estado")) %>% 
+  rename(customer_state=Sigla)
+# join customer -----------------------------------------------------------
+
+df_casa_nova_cust <- df_casa_nova %>%
+  left_join(df_customer)
+
+
+
+df_casa_nova_cust_pre<-
+df_casa_nova_cust %>% 
+  group_by(customer_state) %>% 
+  summarise(n_orders = n()) %>% 
+  mutate(prop = n_orders/sum(n_orders))
+
+br_maps_3 <- br_maps_2 %>% 
+  left_join(df_casa_nova_cust_pre)
+
+br_maps_3 %>% 
+  ggplot() +
+  geom_sf(aes(fill = n_orders)) +
+  geom_sf_text(aes(label = scales::percent(prop,2))) +
+  scale_fill_continuous(type = "gradient",trans = "reverse") +
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x =element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(fill = "Quantidade de compras")
