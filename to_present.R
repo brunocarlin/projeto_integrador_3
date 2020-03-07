@@ -93,10 +93,6 @@ products_to_use <- df_gross_sales_category %>%
   pull(product_category_name)
 
 df_gross_sales_category2 <- df_gross_sales_category %>% filter(product_category_name %in% products_to_use)
-df_gross_sales_category2 %>% count()
-
-df_gross_sales_category%>% ungroup %>%  summarise(soma_itens = sum(number_products))
-
 
 p2 <- df_gross_sales_category2 %>% 
   ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas),y = number_products,fill = review_simple)) +
@@ -209,6 +205,37 @@ df_casa_nova_cust <- df_casa_nova %>%
 
 
 
+# join region -----------------------------------------------------------------------------------------------------
+
+df_casa_nova_cust_state <- df_casa_nova_cust %>% 
+  left_join(br_sigla,by = c('customer_state' = 'Sigla'))
+
+df_to_plot <- df_casa_nova_cust_state %>% 
+  group_by(Region,review_simple) %>% 
+  summarise(number_products = n()) %>% 
+  group_by(Region) %>% 
+  mutate(percent_notas = number_products/sum(number_products))
+
+p7 <- df_to_plot %>%
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder2(Region,review_simple,-percent_notas), y = percent_notas,text = number_products,fill = review_simple)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
+            size = 4.5,
+            position = position_stack(vjust = 0.5)) +
+  coord_flip() +
+  labs(x = NULL, y = "Porcentagem de avaliações") +
+  theme(legend.position = "none",
+        text = element_text(size = 14),axis.title.x = element_text(size = 14))
+
+p7
+
+# plot cust -------------------------------------------------------------------------------------------------------
+
+
 df_casa_nova_cust_pre<- df_casa_nova_cust %>% 
   group_by(customer_state) %>% 
   summarise(n_orders = n()) %>% 
@@ -253,7 +280,7 @@ df_to_plot <- df_casa_nova_cust_sudeste %>%
                            probabilidade_quantil >= 7500 ~ 'quarto'))
 
 
-df_to_plot %>% 
+p3 <- df_to_plot %>% 
   group_by(score,review_simple) %>% 
   summarise(n_orders = n(),
             min_order = min(total_price),
@@ -266,30 +293,27 @@ df_to_plot %>%
            position = "fill") +
   scale_fill_manual(values = c("steelblue","red")) +
   scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
-  geom_text(aes(label = scales::percent(prop,accuracy = 2)),
-            size = 5,
-            position = position_stack(vjust = 0.2)) +
-  geom_text(aes(label = n_orders),
-            size = 5,
-            position = position_stack(vjust = 0.45)) +
   geom_text(aes(label = max_order),
-            size = 5,
-            position = position_stack(vjust = 0.65)) +
+            size = 10,
+            position = position_stack(vjust = .8)) +
   geom_text(aes(label = min_order),
-            size = 5,
-            position = position_stack(vjust = .85)) +
+            size = 10,
+            position = position_stack(vjust = .2)) +
   labs(x = 'Quartis (Preço Total do produto)',y = 'Porcentagem',fill = "Nota") +
-  theme(text = element_text(size = 16))
+  theme(text = element_text(size = 24))
 
 
-
-df_casa_nova_cust_sudeste %>% 
+p3
+p4 <- df_casa_nova_cust_sudeste %>% 
   ggplot() +
   aes(x = log(total_price),color = review_simple) +
   geom_density() +
   scale_color_manual(values = c("steelblue","red")) +
   labs(y = 'Densidade',x = 'Log do Preço Total do produto',color = 'Nota') +
-  theme(text = element_text(size = 16))
+  theme(text = element_text(size = 24))
+
+
+gridExtra::grid.arrange(p3,p4)
 
 
 # heatmap meio de pagamento -----------------------------------------------
@@ -335,5 +359,3 @@ df_to_plot %>%
   scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
   labs(x = "Meio de pagamento",y = 'Quantidade de meios de pagamento',fill = "Quantidade de compras") +
   theme(text = element_text(size = 16))
-
-
