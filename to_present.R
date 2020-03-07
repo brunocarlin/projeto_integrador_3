@@ -101,10 +101,14 @@ df_gross_sales_category%>% ungroup %>%  summarise(soma_itens = sum(number_produc
 p2 <- df_gross_sales_category2 %>% 
   ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas),y = number_products,fill = review_simple)) +
   geom_col() +
-  labs(y = "Número de itens comprados") +
+  labs(y = "Número de itens comprados",fill = 'Nota') +
   theme(axis.title.y=element_blank(),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank()) +
+        axis.ticks.y=element_blank(),
+        axis.title.x = element_text(size = 16),
+        axis.text.x = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 18)) +
   coord_flip() +
   scale_fill_manual(values = c("steelblue","red")) +
   geom_text(aes(label = number_products),
@@ -125,7 +129,9 @@ p1 <- df_gross_sales_category2 %>%
             position = position_stack(vjust = 0.5)) +
   coord_flip() +
   labs(x = "Categorias", y = "Porcentagem de avaliações") +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16))
 
 p1
 
@@ -193,12 +199,8 @@ br_maps <- brazilmaps::get_brmap("State")
 
 br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
-br_maps %>% as_tibble()
-
-
 br_maps_2 <- br_maps %>% 
-  mutate(Estado = nome %>% str_to_lower()) %>% 
-  left_join(br_sigla %>% mutate(Estado = Estado %>% str_to_lower),by = c("Estado")) %>% 
+  left_join(br_sigla %>% mutate(Estado = Estado %>% str_to_upper),by = c("nome" ="Estado")) %>% 
   rename(customer_state=Sigla)
 # join customer -----------------------------------------------------------
 
@@ -207,8 +209,7 @@ df_casa_nova_cust <- df_casa_nova %>%
 
 
 
-df_casa_nova_cust_pre<-
-df_casa_nova_cust %>% 
+df_casa_nova_cust_pre<- df_casa_nova_cust %>% 
   group_by(customer_state) %>% 
   summarise(n_orders = n()) %>% 
   mutate(prop = n_orders/sum(n_orders))
@@ -216,11 +217,10 @@ df_casa_nova_cust %>%
 br_maps_3 <- br_maps_2 %>% 
   left_join(df_casa_nova_cust_pre)
 
-br_maps_3 %>% 
-  ggplot() +
+ggplot(data = br_maps_3) +
   geom_sf(aes(fill = n_orders)) +
   geom_sf_text(aes(label = scales::percent(prop,2))) +
-  scale_fill_continuous(type = "gradient",trans = "reverse") +
+  scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
   theme(axis.line = element_blank(),
         axis.text = element_blank(),
         axis.ticks = element_blank(),
@@ -233,3 +233,107 @@ br_maps_3 %>%
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank()) +
   labs(fill = "Quantidade de compras")
+
+
+# casa sudeste ------------------------------------------------------------
+
+filter_states <- c('SP','RJ','MG','ES')
+
+df_casa_nova_cust_sudeste <- df_casa_nova_cust %>%
+  filter(customer_state %in% filter_states)
+
+
+# valor plots -------------------------------------------------------------
+
+df_to_plot <- df_casa_nova_cust_sudeste %>% 
+  mutate(probabilidade_quantil = total_price %>% ntile(10000),
+         score = case_when(probabilidade_quantil < 2500 ~ 'primeiro',
+                           probabilidade_quantil >= 2500 & probabilidade_quantil < 5000 ~ 'segundo',
+                           probabilidade_quantil >= 5000 & probabilidade_quantil < 7500 ~ 'terceiro',
+                           probabilidade_quantil >= 7500 ~ 'quarto'))
+
+
+df_to_plot %>% 
+  group_by(score,review_simple) %>% 
+  summarise(n_orders = n(),
+            min_order = min(total_price),
+            max_order = max(total_price)) %>% 
+  group_by(score) %>% 
+  mutate(prop = n_orders/sum(n_orders)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder(score,max_order), y = prop,fill = review_simple)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(prop,accuracy = 2)),
+            size = 5,
+            position = position_stack(vjust = 0.2)) +
+  geom_text(aes(label = n_orders),
+            size = 5,
+            position = position_stack(vjust = 0.45)) +
+  geom_text(aes(label = max_order),
+            size = 5,
+            position = position_stack(vjust = 0.65)) +
+  geom_text(aes(label = min_order),
+            size = 5,
+            position = position_stack(vjust = .85)) +
+  labs(x = 'Quartis (Preço Total do produto)',y = 'Porcentagem',fill = "Nota") +
+  theme(text = element_text(size = 16))
+
+
+
+df_casa_nova_cust_sudeste %>% 
+  ggplot() +
+  aes(x = log(total_price),color = review_simple) +
+  geom_density() +
+  scale_color_manual(values = c("steelblue","red")) +
+  labs(y = 'Densidade',x = 'Log do Preço Total do produto',color = 'Nota') +
+  theme(text = element_text(size = 16))
+
+
+# heatmap meio de pagamento -----------------------------------------------
+
+one_if_present <- function(x1,x2,x3,x4) {
+  ifelse(x1 %>% is.na,0,1) +ifelse(x2 %>% is.na,0,1) + ifelse(x3%>% is.na,0,1)+ ifelse(x4%>% is.na,0,1)
+}
+
+name_if_present <- function(x1,x2,x3,x4) {
+  text_vector <- character(4)
+  ifelse(x1 %>% is.na,NA_character_,text_vector[1] <- "credit_card")
+  ifelse(x2 %>% is.na,NA_character_,text_vector[2] <- "boleto")
+  ifelse(x3 %>% is.na,NA_character_,text_vector[3] <- "voucher")
+  ifelse(x4 %>% is.na,NA_character_,text_vector[4] <- "debit_card")
+  text_vector %>% list()
+}
+
+df_to_unnest <- df_orders_itens_reviews_payments_products %>% 
+  mutate(formas = one_if_present(credit_card,boleto,voucher,debit_card)) %>% 
+  rowwise() %>% 
+  mutate(names_to_extend = name_if_present(credit_card,boleto,voucher,debit_card))
+
+df_unnest <- df_to_unnest %>% 
+  unnest() %>% 
+  filter(names_to_extend != "")
+
+df_to_plot <- df_unnest %>% 
+  group_by(formas,names_to_extend) %>% 
+  summarise(quantidade_compras = n()) %>% 
+  ungroup() %>% 
+  mutate(formas = formas %>% as.character(),
+         percent_compras = quantidade_compras/sum(quantidade_compras))
+
+
+
+df_to_plot %>% 
+  ggplot(aes(x = fct_reorder(names_to_extend,quantidade_compras),y = formas,fill = quantidade_compras)) +
+  geom_tile() +
+  geom_text(aes(label = quantidade_compras),
+            size = 5) +
+  geom_text(aes(label = scales::percent(percent_compras,2)),
+            size = 5,position = position_nudge(y = -.1)) +
+  scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
+  labs(x = "Meio de pagamento",y = 'Quantidade de meios de pagamento',fill = "Quantidade de compras") +
+  theme(text = element_text(size = 16))
+
+
