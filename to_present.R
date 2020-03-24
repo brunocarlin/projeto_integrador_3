@@ -10,6 +10,9 @@ df_orders <- vroom('olist/olist_orders_dataset.csv')
 df_products <- vroom('olist/olist_products_dataset.csv')
 df_sellers <- vroom('olist/olist_sellers_dataset.csv')
 
+br_sigla <- readxl::read_excel('table_brazil.xlsx')
+
+
 
 # join itens ordens -----------------------------------------------------------------------------------------------
 
@@ -64,6 +67,11 @@ df_orders_itens_reviews_payments_products <- df_orders_itens_reviews_payments %>
   left_join(df_products)
 
 
+# join customer ---------------------------------------------------------------------------------------------------
+
+df_orders_itens_reviews_payments_products_customer <- df_orders_itens_reviews_payments_products %>% 
+  left_join(df_customer) %>% 
+  left_join(br_sigla,by = c('customer_state' = 'Sigla'))
 # theme set -------------------------------------------------------------------------------------------------------
 
 
@@ -197,7 +205,7 @@ br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
 br_maps_2 <- br_maps %>% 
   left_join(br_sigla %>% mutate(Estado = Estado %>% str_to_upper),by = c("nome" ="Estado")) %>% 
-  rename(customer_state=Sigla)
+  rename(customer_state = Sigla)
 # join customer -----------------------------------------------------------
 
 df_casa_nova_cust <- df_casa_nova %>%
@@ -236,7 +244,7 @@ p7
 # plot cust -------------------------------------------------------------------------------------------------------
 
 
-df_casa_nova_cust_pre<- df_casa_nova_cust %>% 
+df_casa_nova_cust_pre <- df_casa_nova_cust %>% 
   group_by(customer_state) %>% 
   summarise(n_orders = n()) %>% 
   mutate(prop = n_orders/sum(n_orders))
@@ -244,8 +252,8 @@ df_casa_nova_cust_pre<- df_casa_nova_cust %>%
 br_maps_3 <- br_maps_2 %>% 
   left_join(df_casa_nova_cust_pre)
 
-ggplot(data = br_maps_3) +
-  geom_sf(aes(fill = n_orders)) +
+ggplot(data = br_maps_3 %>% sf::st_sf()) +
+  geom_sf(aes(fill = n_orders,geometry = geometry)) +
   geom_sf_text(aes(label = scales::percent(prop,2))) +
   scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
   theme(axis.line = element_blank(),
