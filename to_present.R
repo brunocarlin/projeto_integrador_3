@@ -1,5 +1,10 @@
-library(tidyverse)
+library(shiny)
+library(shinydashboard)
 library(vroom)
+library(tidyverse)
+library(plotly)
+library(DT)
+library(emojifont)
 
 df_customer <- vroom('olist/olist_customers_dataset.csv')
 df_geo <- vroom('olist/olist_geolocation_dataset.csv')
@@ -10,9 +15,10 @@ df_orders <- vroom('olist/olist_orders_dataset.csv')
 df_products <- vroom('olist/olist_products_dataset.csv')
 df_sellers <- vroom('olist/olist_sellers_dataset.csv')
 
+
 br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
-
+br_maps <- brazilmaps::get_brmap("State")
 
 # join itens ordens -----------------------------------------------------------------------------------------------
 
@@ -66,12 +72,13 @@ df_orders_itens_reviews_payments <- df_orders_itens_reviews %>%
 df_orders_itens_reviews_payments_products <- df_orders_itens_reviews_payments %>%
   left_join(df_products)
 
-
 # join customer ---------------------------------------------------------------------------------------------------
 
 df_orders_itens_reviews_payments_products_customer <- df_orders_itens_reviews_payments_products %>% 
   left_join(df_customer) %>% 
   left_join(br_sigla,by = c('customer_state' = 'Sigla'))
+
+
 # theme set -------------------------------------------------------------------------------------------------------
 
 
@@ -171,9 +178,10 @@ df_gross_sales_category5 <- df_casa_nova %>%
 
 df_gross_sales_category6 <- df_gross_sales_category5 %>% 
   group_by(review_simple,bucket_itens) %>% 
-  summarise(number_products = n()) %>% 
+  summarise(number_products = n(),total_gross_sale = sum(total_gross_sale)) %>% 
   group_by(bucket_itens) %>% 
-  mutate(percent_notas = number_products/sum(number_products))
+  mutate(percent_notas = number_products/sum(number_products),
+         percent_notas_gs = total_gross_sale/sum(total_gross_sale))
 
 
 df_gross_sales_category6 %>%
@@ -249,11 +257,23 @@ df_casa_nova_cust_pre <- df_casa_nova_cust %>%
   summarise(n_orders = n()) %>% 
   mutate(prop = n_orders/sum(n_orders))
 
-br_maps_3 <- br_maps_2 %>% 
-  left_join(df_casa_nova_cust_pre)
+df_state <-  df_orders_itens_reviews_payments_products_customer %>% 
+  group_by(Estado) %>% 
+  summarise(n_orders = n(),gross_sales = sum(total_price)) %>% 
+  mutate(prop = n_orders/sum(n_orders),
+         nome = Estado %>% str_to_upper(),
+         prop_gross = gross_sales/sum(gross_sales),
+         label_prod = paste(scales::percent(prop,2),
+                            n_orders))
 
-ggplot(data = br_maps_3 %>% sf::st_sf()) +
-  geom_sf(aes(fill = n_orders,geometry = geometry)) +
+
+br_maps_3 <- br_maps_2 %>% 
+  left_join(df_state) %>%
+  sf::st_sf()
+
+p <- ggplot(data = br_maps_3) +
+  aes(text = n_orders) +
+  geom_sf(aes(fill = n_orders)) +
   geom_sf_text(aes(label = scales::percent(prop,2))) +
   scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
   theme(axis.line = element_blank(),
@@ -269,6 +289,29 @@ ggplot(data = br_maps_3 %>% sf::st_sf()) +
         panel.grid.minor = element_blank()) +
   labs(fill = "Quantidade de compras")
 
+ggplot(data = br_maps_3) +
+  geom_sf(aes(fill = gross_sales)) +
+  geom_sf_text(aes(label = scales::percent(prop_gross,2))) +
+  geom_sf_text(aes(label = scales::dollar(gross_sales,
+                                          scale = 1/1000,
+                                          suffix = "k",
+                                          largest_with_cents = 0)),nudge_y = .5) +
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x =element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(fill = "Tamanho do Mercado") +
+  scale_fill_distiller(label = scales::dollar_format(scale = 1/1000,
+                                               suffix = "k",
+                                               largest_with_cents = 0),
+                       palette = 'PuBu',direction = 1)
 
 # casa sudeste ------------------------------------------------------------
 

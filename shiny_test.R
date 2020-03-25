@@ -2,6 +2,9 @@ library(shiny)
 library(shinydashboard)
 library(vroom)
 library(tidyverse)
+library(plotly)
+library(DT)
+library(emojifont)
 
 df_customer <- vroom('olist/olist_customers_dataset.csv')
 df_geo <- vroom('olist/olist_geolocation_dataset.csv')
@@ -14,6 +17,8 @@ df_sellers <- vroom('olist/olist_sellers_dataset.csv')
 
 
 br_sigla <- readxl::read_excel('table_brazil.xlsx')
+
+br_maps <- brazilmaps::get_brmap("State")
 
 # join itens ordens -----------------------------------------------------------------------------------------------
 
@@ -93,6 +98,11 @@ sidebar <- dashboardSidebar(sidebarMenu(
     tabName = "pies",
     icon = icon("chart-pie")
   ),
+  menuItem(
+    "Exploração das Regiões",
+    tabName = "maps",
+    icon = icon("map")
+  ),
   sliderInput(
     "number",
     NULL,
@@ -124,14 +134,19 @@ body <- dashboardBody(
     tabItem(
     tabName = "categories",
     fluidRow(valueBoxOutput("titulo", width = 12)),
+    fluidRow(
+      valueBoxOutput("approval_box"),
+      valueBoxOutput("gross_sales_box"),
+      valueBoxOutput("number_products_box")
+    ),
     conditionalPanel(condition = "input.var == 'number_products'",
                       fluidRow(
                         column(
-                          width = 6,
+                          width = 4,
                           plotOutput(outputId = "number_products2")
                           ),
                         column(
-                          width = 6,
+                          width = 8,
                           plotOutput(outputId = "number_products3")
                           )
                       ),
@@ -144,47 +159,65 @@ body <- dashboardBody(
     conditionalPanel(condition = "input.var == 'total_gross_sale'",
                      fluidRow(
                        column(
-                         width = 6,
+                         width = 4,
                          plotOutput(outputId = "total_gross_sale2")
                        ),
                        column(
-                         width = 6,
+                         width = 8,
                          plotOutput(outputId = "total_gross_sale3")
                        )
                      ),
                      fluidRow(
                        box(width = 12,
-                           tableOutput(outputId = "total_gross_sale1")
+                           DTOutput(outputId = "total_gross_sale1")
+                                    
                           )
                       )
                     )
     
                   ),
-    tabItem(tabName = "pies",
-            fluidRow(valueBoxOutput("header_pie_chart", width = 12)),
-            fluidRow(
-              column(
-                width = 6,
-                plotlyOutput(outputId = "pie_chart_low")
-              ),
-              column(
-                width = 6,
-                plotlyOutput(outputId = "pie_chart_high")
-              )
-            ),
-            fluidRow(
-              column(
-                width = 6,
-                plotlyOutput(outputId = "hist_order_low")
-              ),
-              column(
-                width = 6,
-                plotlyOutput(outputId = "hist_order_high")
-              )
-            )
-            
-            
-    ))
+    tabItem(
+      tabName = "pies",
+      fluidRow(valueBoxOutput("header_pie_chart", width = 12)),
+      conditionalPanel(
+        condition = "input.var == 'number_products'",
+        fluidRow(
+          column(width = 6,
+                 plotlyOutput(outputId = "pie_chart_low1")),
+          column(width = 6,
+                 plotlyOutput(outputId = "pie_chart_high1"))
+        ),
+        fluidRow(
+          column(width = 6,
+                 plotlyOutput(outputId = "hist_order_low1")),
+          column(width = 6,
+                 plotlyOutput(outputId = "hist_order_high1"))
+        )
+      ),
+      conditionalPanel(
+        condition =  "input.var == 'total_gross_sale'",
+        fluidRow(
+          column(width = 6,
+                 plotlyOutput(outputId = "pie_chart_low2")),
+          column(width = 6,
+                 plotlyOutput(outputId = "pie_chart_high2"))
+        ),
+        fluidRow(
+          column(width = 6,
+                 plotlyOutput(outputId = "hist_order_low2")),
+          column(width = 6,
+                 plotlyOutput(outputId = "hist_order_high2"))
+        )
+      )
+    ),
+    tabItem(tabName = "maps",
+            fluidRow(valueBoxOutput("header_map_charts", width = 12)),
+            conditionalPanel(condition = "input.var == 'number_products'",
+                             fluidRow(plotOutput("plot_map1",height = "1200px"))),
+            conditionalPanel(condition = "input.var == 'total_gross_sale'",
+                             fluidRow(plotOutput("plot_map2",height = "1200px")))
+    )
+    )
 )
 
 ui <- dashboardPage(header, sidebar, body, skin = "blue")
@@ -222,6 +255,7 @@ server <- function(input, output, session){
                                 filter(product_category_name %>% is.na() %>% `!`) %>% 
                                 pull(product_category_name))
   
+  
   df_gross_sales_category2 <- reactive(df_gross_sales_category() %>% filter(product_category_name %in% products_to_use()))
   
   df_gross_sales_category3 <- reactive(df_gross_sales_category2() %>%
@@ -236,39 +270,69 @@ server <- function(input, output, session){
                                          mutate(mean_price = total_gross_sale / number_products) %>% 
                                          arrange(-number_products))
   
-  df_pie_chart <- reactive(selected() %>%
-    filter(product_category_name == input$new_category_name) %>% 
+
+  df_created_category <- reactive(selected() %>%
+    filter(product_category_name == input$new_category_name))
+  
+  created_category_approval <- reactive(df_created_category() %>% 
+                                          count(review_simple) %>%
+                                          mutate(percent_notas = n/sum(n)) %>% 
+                                          pull(percent_notas) %>% 
+                                          head(1) %>% 
+                                          scales::percent())
+  
+  created_category_gross_sales <- reactive(df_created_category() %>%
+    summarise(total_gross =sum(total_price)) %>%
+    pull() %>%
+    scales::dollar(scale = 1/1000,suffix = "k",largest_with_cents = 0))
+  
+  created_category_number_products <- reactive(df_created_category() %>%
+    count() %>% 
+    pull())
+  
+  df_pie_chart <- reactive(df_created_category() %>% 
     group_by(order_id,review_simple) %>% 
     summarise(total_gross_sale = sum(total_price,na.rm = T),
               mean_price = mean(total_price,na.rm = T),
               number_products = n()) %>%
     mutate(bucket_itens = if_else(number_products >= 3,'3 ou mais',number_products %>% as.character())) %>% 
     group_by(review_simple,bucket_itens) %>% 
-    summarise(number_products = n()) %>% 
+    summarise(number_products = n(),total_gross_sale = sum(total_gross_sale)) %>% 
     group_by(bucket_itens) %>% 
-    mutate(percent_notas = number_products/sum(number_products)) %>% 
-    group_by(review_simple) %>% 
-    mutate(percent_prod = number_products/sum(number_products)))
+    mutate(percent_notas = number_products/sum(number_products),
+           percent_notas_gs = total_gross_sale/sum(total_gross_sale)))
   
-  df_hist_order <- reactive(selected() %>% 
-    group_by(order_id,review_simple) %>% 
-    summarise(total_gross_sale = sum(total_price,na.rm = T),
-              mean_price = mean(total_price,na.rm = T),
-              number_products = n()) %>%
-    group_by(review_simple,number_products) %>% 
-    summarise(number_instances = n()) %>% 
-    group_by(number_products) %>% 
-    mutate(percent_notas = number_instances/sum(number_instances)) %>% 
-    group_by(review_simple) %>% 
-    mutate(percent_prod = number_instances/sum(number_instances)) %>% 
-    ungroup() %>% 
-    mutate(number_products = number_products %>% as_factor(),
-           percent_prod_p = scales::percent(percent_prod)))
+  df_hist_order <- reactive(df_created_category() %>% 
+                              group_by(order_id,review_simple) %>% 
+                              summarise(total_gross_sale = sum(total_price,na.rm = T),
+                                        mean_price = mean(total_price,na.rm = T),
+                                        number_products = n()) %>%
+                              group_by(review_simple,number_products) %>% 
+                              summarise(number_instances = n(),total_gross_sale = sum(total_gross_sale)) %>% 
+                              group_by(number_products) %>% 
+                              mutate(percent_notas = number_instances/sum(number_instances),
+                                     percent_gross_sales = total_gross_sale/sum(total_gross_sale)) %>% 
+                              group_by(review_simple) %>% 
+                              mutate(percent_prod = number_instances/sum(number_instances),
+                                     percent_prod_gs = total_gross_sale/sum(total_gross_sale)) %>% 
+                              ungroup() %>% 
+                              mutate(number_products = number_products %>% as_factor(),
+                                     percent_prod_p = scales::percent(percent_prod,2),
+                                     percent_prod_gs_p = scales::percent(percent_prod_gs,2)))
+  
+  df_state <- reactive(df_created_category() %>% 
+                         group_by(Estado) %>% 
+                         summarise(n_orders = n(),gross_sales = sum(total_price)) %>% 
+                         mutate(prop = n_orders/sum(n_orders),
+                                nome = Estado %>% str_to_upper(),
+                                prop_gross = gross_sales/sum(gross_sales),
+                                label_prod = paste(scales::percent(prop,2),
+                                                   n_orders)))
+  
+  df_map <- reactive(br_maps %>% 
+    left_join(df_state(),by = c("nome")))
   
   
-  
-  
-
 # server outputs --------------------------------------------------------------------------------------------------
 
 
@@ -281,8 +345,20 @@ server <- function(input, output, session){
 
 # categories total_gross_sale1 outputs ----------------------------------------------------------------------------------------
 
-  output$total_gross_sale1 <- renderTable(
-    df_gross_sales_category3()
+  output$total_gross_sale1 <- renderDT(
+    df_gross_sales_category3() %>% 
+      mutate(alta = scales::percent(alta,accuracy = .01),
+             baixa = scales::percent(baixa,accuracy = .01),
+             total_gross_sale = scales::dollar(total_gross_sale,
+                                               scale = 1/1000,
+                                               suffix = "k",
+                                               largest_with_cents = 0),
+             mean_price = scales::number(mean_price,accuracy = 0.01),
+             ),
+    options = list(
+      dom = 'Bfrtip', buttons = c('copy', 'excel', 'pdf', 'print', 'colvis')
+    ),
+    extensions = c('Buttons',"Responsive")
   )
   
   output$total_gross_sale2 <- renderPlot(
@@ -294,13 +370,10 @@ server <- function(input, output, session){
       scale_fill_manual(values = c("steelblue","red")) +
       scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
       geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
-                size = 4.5,
                 position = position_stack(vjust = 0.5)) +
       coord_flip() +
       labs(x = "Categorias", y = "Porcentagem de avaliações") +
-      theme(legend.position = "none",
-            axis.text=element_text(size=16),
-            axis.title = element_text(size = 16))
+      theme(legend.position = "none")
   )
   
   output$total_gross_sale3 <- renderPlot(
@@ -310,16 +383,11 @@ server <- function(input, output, session){
       labs(y = "Tamanho do Mercado",fill = 'Nota') +
       theme(axis.title.y=element_blank(),
             axis.text.y=element_blank(),
-            axis.ticks.y=element_blank(),
-            axis.title.x = element_text(size = 16),
-            axis.text.x = element_text(size = 16),
-            legend.text = element_text(size = 16),
-            legend.title = element_text(size = 18)) +
+            axis.ticks.y=element_blank()) +
       coord_flip() +
       scale_fill_manual(values = c("steelblue","red")) +
       scale_y_continuous(label =scales::dollar_format(scale = 1/1000,suffix = "k",largest_with_cents = 0)) +
       geom_text(aes(label = scales::dollar(total_gross_sale,scale = 1/1000,suffix = "k",largest_with_cents = 0)),
-                size = 4.5,
                 position = position_stack(vjust = 0.5))
   )
   
@@ -340,13 +408,10 @@ server <- function(input, output, session){
       scale_fill_manual(values = c("steelblue","red")) +
       scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
       geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
-                size = 4.5,
                 position = position_stack(vjust = 0.5)) +
       coord_flip() +
       labs(x = "Categorias", y = "Porcentagem de avaliações") +
-      theme(legend.position = "none",
-            axis.text=element_text(size=16),
-            axis.title = element_text(size = 16))
+      theme(legend.position = "none")
   )
   
   output$number_products3 <- renderPlot(
@@ -356,17 +421,36 @@ server <- function(input, output, session){
       labs(y = "Número de itens comprados",fill = 'Nota') +
       theme(axis.title.y=element_blank(),
             axis.text.y=element_blank(),
-            axis.ticks.y=element_blank(),
-            axis.title.x = element_text(size = 16),
-            axis.text.x = element_text(size = 16),
-            legend.text = element_text(size = 16),
-            legend.title = element_text(size = 18)) +
+            axis.ticks.y=element_blank()) +
       coord_flip() +
       scale_fill_manual(values = c("steelblue","red")) +
       geom_text(aes(label = number_products),
-                size = 4.5,
                 position = position_stack(vjust = 0.5))
   )
+
+# value boxes/ infoBox
+  
+  output$approval_box <- renderValueBox({
+    valueBox(
+      created_category_approval(), "Notas Altas %", icon = icon("thumbs-up", lib = "glyphicon"),
+      color = "blue"
+    )
+  })
+  
+  output$gross_sales_box <- renderValueBox({
+    valueBox(
+      created_category_gross_sales(), "Tamanho do mercado", icon = icon("credit-card", lib = "glyphicon"),
+      color = "yellow"
+    )
+  })
+  
+  output$number_products_box <- renderValueBox({
+    valueBox(
+      created_category_number_products(), "Quantidade de itens", icon = icon("shopping-basket"),
+      color = "green"
+    )
+  })
+  
   
 # orders -----------------------------------------------------
   
@@ -376,7 +460,7 @@ server <- function(input, output, session){
     )
   )
   
-  output$pie_chart_low <- renderPlotly(
+  output$pie_chart_low1 <- renderPlotly(
     df_pie_chart() %>% 
       filter(review_simple == "baixa") %>% 
       plot_ly(labels = ~bucket_itens, values = ~number_products,
@@ -386,13 +470,13 @@ server <- function(input, output, session){
                      textinfo = 'label+percent',
                      showlegend = FALSE) %>% 
       add_pie(hole = .5) %>%
-      layout(title = 'Quantidade de itens por pedido com notas baixas',
+      layout(title = paste(emoji('angry'),'Quantidade de itens por pedido com notas baixas',emoji('angry')),
              xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
              yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
    
   )
   
-  output$pie_chart_high <- renderPlotly(
+  output$pie_chart_high1 <- renderPlotly(
     df_pie_chart() %>% 
       filter(review_simple == "alta") %>% 
       plot_ly(labels = ~bucket_itens, values = ~number_products,
@@ -402,12 +486,12 @@ server <- function(input, output, session){
               textinfo = 'label+percent',
               showlegend = FALSE) %>% 
       add_pie(hole = .5) %>%
-      layout(title = 'Quantidade de itens por pedido com notas altas',
+      layout(title = paste(emoji('smile'),'Quantidade de itens por pedido com notas altas',emoji('smile')),
              xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
              yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
   )
   
-  output$hist_order_low <- renderPlotly({
+  output$hist_order_low1 <- renderPlotly({
     ggplotly( 
       ggplot(data = df_hist_order() %>% 
                filter(review_simple == "baixa"),
@@ -420,11 +504,11 @@ server <- function(input, output, session){
       scale_y_continuous(labels = scales::percent) +
       labs(x = 'Quantidade de produtos no pedido',
            y = 'Porcentagem de pedidos'),
-      tooltip = c('text','number_instances'))
+      tooltip = c('text'))
     
 })
   
-  output$hist_order_high <- renderPlotly({
+  output$hist_order_high1 <- renderPlotly({
     ggplotly(
       ggplot(data = df_hist_order() %>% filter(review_simple == "alta"),
              aes(x = number_products,
@@ -436,9 +520,137 @@ server <- function(input, output, session){
       scale_y_continuous(labels = scales::percent) +
         labs(x = 'Quantidade de produtos no pedido',
              y = 'Porcentagem de pedidos'),
-      tooltip = c('text','number_instances'))
+      tooltip = c('text'))
     
 })
+
+
+# pie market ------------------------------------------------------------------------------------------------------
+
+  output$pie_chart_low2 <- renderPlotly(
+    df_pie_chart() %>% 
+      filter(review_simple == "baixa") %>% 
+      plot_ly(labels = ~bucket_itens, values = ~total_gross_sale,
+              marker = list(colors = c("steelblue", "grey", "red"),
+                            line = list(color = '#FFFFFF', width = 1)),
+              textposition = 'inside',
+              textinfo = 'label+percent',
+              showlegend = FALSE) %>% 
+      add_pie(hole = .5) %>%
+      layout(title = paste(emoji('angry'),'Tamanho do mercado com notas baixas',emoji('angry')),
+             xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+             yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+    
+  )
+  
+  output$pie_chart_high2 <- renderPlotly(
+    df_pie_chart() %>% 
+      filter(review_simple == "alta") %>% 
+      plot_ly(labels = ~bucket_itens, values = ~total_gross_sale,
+              marker = list(colors = c("steelblue", "grey", "red"),
+                            line = list(color = '#FFFFFF', width = 1)),
+              textposition = 'inside',
+              textinfo = 'label+percent',
+              showlegend = FALSE) %>% 
+      add_pie(hole = .5) %>%
+      layout(title = paste(emoji('smile'),'Tamanho do mercado com notas altas',emoji('smile')),
+             xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+             yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+  )
+  
+  output$hist_order_low2 <- renderPlotly({
+    ggplotly(
+      ggplot(data = df_hist_order() %>% 
+               filter(review_simple == "baixa"),
+             aes(x = number_products,
+                 y = percent_prod_gs,
+                 text = paste(percent_prod_gs_p,"\n",scales::dollar(total_gross_sale,scale = 1/1000,
+                                                                    suffix = "k",
+                                                                    largest_with_cents = 0),sep = "")
+             )
+      ) +
+        geom_col(fill = "red") +
+        scale_y_continuous(labels = scales::percent) +
+        labs(x = 'Quantidade de produtos no pedido',
+             y = 'Tamanho do Mercado'),
+      tooltip = c('text'))
+    
+  })
+  
+  output$hist_order_high2 <- renderPlotly({
+    ggplotly(
+      ggplot(data = df_hist_order() %>% 
+               filter(review_simple == "alta"),
+             aes(x = number_products,
+                 y = percent_prod_gs,
+                 text = paste(percent_prod_gs_p,"\n",scales::dollar(total_gross_sale,scale = 1/1000,
+                                                                    suffix = "k",
+                                                                    largest_with_cents = 0),sep = "")
+             )
+      ) +
+        geom_col(fill = "steelblue") +
+        scale_y_continuous(labels = scales::percent) +
+        labs(x = 'Quantidade de produtos no pedido',
+             y = 'Tamanho do Mercado'),
+      tooltip = c('text'))
+    
+  })
+  
+# maps ------------------------------------------------------------------------------------------------------------
+  
+  output$plot_map1 <- renderPlot(
+    df_map() %>% sf::st_sf() %>% 
+      ggplot() +
+      geom_sf(aes(fill = n_orders,geometry = geometry)) +
+      geom_sf_text(aes(label = scales::percent(prop,2))) +
+      geom_sf_text(aes(label = n_orders),nudge_y = .5) +
+      scale_fill_distiller(palette = 'PuBu',direction = 1) +
+      theme(axis.line = element_blank(),
+            axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            axis.title.y=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x =element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank()) +
+      labs(fill = "Quantidade de compras")
+  )
+  
+  output$plot_map2 <- renderPlot(
+    df_map() %>% sf::st_sf() %>%
+      ggplot() +
+      geom_sf(aes(fill = gross_sales)) +
+      geom_sf_text(aes(label = scales::percent(prop_gross,2))) +
+      geom_sf_text(aes(label = scales::dollar(gross_sales,
+                                              scale = 1/1000,
+                                              suffix = "k",
+                                              largest_with_cents = 0)),nudge_y = .5) +
+      theme(axis.line = element_blank(),
+            axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            axis.title.y=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x =element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank()) +
+      labs(fill = "Tamanho do Mercado") +
+      scale_fill_distiller(label = scales::dollar_format(scale = 1/1000,
+                                                         suffix = "k",
+                                                         largest_with_cents = 0),
+                           palette = 'PuBu',direction = 1)
+  )
+  
+  output$header_map_charts <- renderValueBox(
+    valueBox(paste("Mapa da variavel ", input$new_category_name), subtitle = NULL, icon = NULL,
+             color = "blue"
+    )
+  )
   
 }
 

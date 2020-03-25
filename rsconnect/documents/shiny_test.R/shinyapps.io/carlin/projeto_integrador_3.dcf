@@ -5,8 +5,8 @@ account: carlin
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1979723
-bundleId: 2917787
+bundleId: 2920990
 url: https://carlin.shinyapps.io/projeto_integrador_3/
-when: 1585052638.88514
+when: 1585105981.5605
 asMultiple: FALSE
 asStatic: FALSE
