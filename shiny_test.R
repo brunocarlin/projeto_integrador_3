@@ -83,9 +83,18 @@ df_orders_itens_reviews_payments_products_customer <- df_orders_itens_reviews_pa
 
 theme_set(new = theme_minimal())
 
+reais <-  scales::label_dollar(prefix = "R$",big.mark = ".",decimal.mark = ",")
+k_reais <- scales::label_dollar(scale = 1/1000,prefix = "R$",suffix = "k",big.mark = ".",decimal.mark = ",",largest_with_cents = 0)
+
 # shiny structure -------------------------------------------------------------------------------------------------
 
+
+# header ----------------------------------------------------------------------------------------------------------
+
 header <- dashboardHeader(title = "Presentation Data Science")
+
+
+# sidebar ---------------------------------------------------------------------------------------------------------
 
 sidebar <- dashboardSidebar(sidebarMenu(
   menuItem(
@@ -102,6 +111,11 @@ sidebar <- dashboardSidebar(sidebarMenu(
     "Exploração das Regiões",
     tabName = "maps",
     icon = icon("map")
+  ),
+  menuItem(
+    "Exploração dos preços",
+    tabName = "prices",
+    icon = icon("tag")
   ),
   sliderInput(
     "number",
@@ -129,9 +143,16 @@ sidebar <- dashboardSidebar(sidebarMenu(
               value = c(min(df_orders_itens_reviews_payments_products_customer$total_price),max(df_orders_itens_reviews_payments_products_customer$total_price)))
 ))
 
+
+# body ------------------------------------------------------------------------------------------------------------
+
 body <- dashboardBody(
   tabItems(
+
+# tabs ------------------------------------------------------------------------------------------------------------
     tabItem(
+
+# categories ------------------------------------------------------------------------------------------------------
     tabName = "categories",
     fluidRow(valueBoxOutput("titulo", width = 12)),
     fluidRow(
@@ -149,13 +170,8 @@ body <- dashboardBody(
                           width = 8,
                           plotOutput(outputId = "number_products3")
                           )
-                      ),
-                     fluidRow(
-                       box(width = 12,
-                           tableOutput(outputId = "number_products1")
-                       )
-                     )
-                    ),
+                      )
+                     ),
     conditionalPanel(condition = "input.var == 'total_gross_sale'",
                      fluidRow(
                        column(
@@ -166,16 +182,13 @@ body <- dashboardBody(
                          width = 8,
                          plotOutput(outputId = "total_gross_sale3")
                        )
-                     ),
-                     fluidRow(
-                       box(width = 12,
-                           DTOutput(outputId = "total_gross_sale1")
-                                    
-                          )
-                      )
-                    )
+                     )
+                    ),
+    fluidRow(DTOutput(outputId = "dt_table"))
     
                   ),
+
+# pies ------------------------------------------------------------------------------------------------------------
     tabItem(
       tabName = "pies",
       fluidRow(valueBoxOutput("header_pie_chart", width = 12)),
@@ -210,12 +223,29 @@ body <- dashboardBody(
         )
       )
     ),
+
+# maps --------------------------------------------------------------------------------------------------------
     tabItem(tabName = "maps",
             fluidRow(valueBoxOutput("header_map_charts", width = 12)),
             conditionalPanel(condition = "input.var == 'number_products'",
                              fluidRow(plotOutput("plot_map1",height = "1200px"))),
             conditionalPanel(condition = "input.var == 'total_gross_sale'",
                              fluidRow(plotOutput("plot_map2",height = "1200px")))
+    ),
+
+
+# prices ----------------------------------------------------------------------------------------------------------
+    tabItem(tabName = "prices",
+            fluidRow(valueBoxOutput(outputId = "header_prices",width = 12)),
+            conditionalPanel(
+              condition = "input.var == 'number_products'",
+              fluidRow(plotlyOutput("quantile_quantity"))
+                             ),
+            conditionalPanel(
+              condition = "input.var == 'total_gross_sale'",
+              fluidRow(plotlyOutput("quantile_sales"))
+              ),
+            fluidRow(plotOutput("density_plot"))
     )
     )
 )
@@ -250,9 +280,9 @@ server <- function(input, output, session){
   
   products_to_use <- reactive(df_gross_sales_category() %>% 
                                 summarise(total_values = sum(number_products)) %>% 
-                                arrange(-total_values) %>% 
-                                top_n(input$number) %>%
+                                arrange(-total_values) %>%
                                 filter(product_category_name %>% is.na() %>% `!`) %>% 
+                                top_n(input$number) %>%
                                 pull(product_category_name))
   
   
@@ -282,9 +312,9 @@ server <- function(input, output, session){
                                           scales::percent())
   
   created_category_gross_sales <- reactive(df_created_category() %>%
-    summarise(total_gross =sum(total_price)) %>%
+    summarise(total_gross = sum(total_price)) %>%
     pull() %>%
-    scales::dollar(scale = 1/1000,suffix = "k",largest_with_cents = 0))
+    k_reais())
   
   created_category_number_products <- reactive(df_created_category() %>%
     count() %>% 
@@ -332,6 +362,22 @@ server <- function(input, output, session){
   df_map <- reactive(br_maps %>% 
     left_join(df_state(),by = c("nome")))
   
+  df_quantiles <- reactive(df_created_category() %>%
+                             mutate(probabilidade_quantil = total_price %>% ntile(10000),
+                                    score = case_when(probabilidade_quantil < 2500 ~ 'primeiro',
+                                                      probabilidade_quantil >= 2500 & probabilidade_quantil < 5000 ~ 'segundo',
+                                                      probabilidade_quantil >= 5000 & probabilidade_quantil < 7500 ~ 'terceiro',
+                                                      probabilidade_quantil >= 7500 ~ 'quarto')) %>% 
+    group_by(score,review_simple) %>% 
+    summarise(n_orders = n(),
+              gross_sales = sum(total_price),
+              min_order = min(total_price),
+              max_order = max(total_price)) %>% 
+    group_by(score) %>% 
+    mutate(prop = n_orders/sum(n_orders),
+           prop_sales = gross_sales/sum(gross_sales)) %>% 
+    ungroup())
+  
   
 # server outputs --------------------------------------------------------------------------------------------------
 
@@ -342,24 +388,22 @@ server <- function(input, output, session){
     )
   )
 
-
-# categories total_gross_sale1 outputs ----------------------------------------------------------------------------------------
-
-  output$total_gross_sale1 <- renderDT(
+# shared table categories and sales
+output$dt_table <- renderDT(
     df_gross_sales_category3() %>% 
       mutate(alta = scales::percent(alta,accuracy = .01),
              baixa = scales::percent(baixa,accuracy = .01),
-             total_gross_sale = scales::dollar(total_gross_sale,
-                                               scale = 1/1000,
-                                               suffix = "k",
-                                               largest_with_cents = 0),
-             mean_price = scales::number(mean_price,accuracy = 0.01),
-             ),
+             total_gross_sale = k_reais(total_gross_sale),
+             mean_price = reais(mean_price),
+      ),
     options = list(
       dom = 'Bfrtip', buttons = c('copy', 'excel', 'pdf', 'print', 'colvis')
     ),
     extensions = c('Buttons',"Responsive")
   )
+# categories total_gross_sale outputs ----------------------------------------------------------------------------------------
+
+
   
   output$total_gross_sale2 <- renderPlot(
     df_gross_sales_category2() %>%
@@ -386,8 +430,8 @@ server <- function(input, output, session){
             axis.ticks.y=element_blank()) +
       coord_flip() +
       scale_fill_manual(values = c("steelblue","red")) +
-      scale_y_continuous(label =scales::dollar_format(scale = 1/1000,suffix = "k",largest_with_cents = 0)) +
-      geom_text(aes(label = scales::dollar(total_gross_sale,scale = 1/1000,suffix = "k",largest_with_cents = 0)),
+      scale_y_continuous(labels = k_reais) +
+      geom_text(aes(label = k_reais(total_gross_sale)),
                 position = position_stack(vjust = 0.5))
   )
   
@@ -501,7 +545,7 @@ server <- function(input, output, session){
                  )
              ) +
       geom_col(fill = "red") +
-      scale_y_continuous(labels = scales::percent) +
+      scale_y_continuous(labels = scales::percent,breaks = scales::breaks_width(.25),,limits = c(0,1)) +
       labs(x = 'Quantidade de produtos no pedido',
            y = 'Porcentagem de pedidos'),
       tooltip = c('text'))
@@ -517,7 +561,7 @@ server <- function(input, output, session){
                  )
              ) +
       geom_col(fill = "steelblue") +
-      scale_y_continuous(labels = scales::percent) +
+      scale_y_continuous(labels = scales::percent,breaks = scales::breaks_width(.25),,limits = c(0,1)) +
         labs(x = 'Quantidade de produtos no pedido',
              y = 'Porcentagem de pedidos'),
       tooltip = c('text'))
@@ -564,13 +608,11 @@ server <- function(input, output, session){
                filter(review_simple == "baixa"),
              aes(x = number_products,
                  y = percent_prod_gs,
-                 text = paste(percent_prod_gs_p,"\n",scales::dollar(total_gross_sale,scale = 1/1000,
-                                                                    suffix = "k",
-                                                                    largest_with_cents = 0),sep = "")
+                 text = paste(percent_prod_gs_p,"\n",k_reais(total_gross_sale),sep = "")
              )
       ) +
         geom_col(fill = "red") +
-        scale_y_continuous(labels = scales::percent) +
+        scale_y_continuous(labels = scales::percent,breaks = scales::breaks_width(.25),limits = c(0,1)) +
         labs(x = 'Quantidade de produtos no pedido',
              y = 'Tamanho do Mercado'),
       tooltip = c('text'))
@@ -583,13 +625,11 @@ server <- function(input, output, session){
                filter(review_simple == "alta"),
              aes(x = number_products,
                  y = percent_prod_gs,
-                 text = paste(percent_prod_gs_p,"\n",scales::dollar(total_gross_sale,scale = 1/1000,
-                                                                    suffix = "k",
-                                                                    largest_with_cents = 0),sep = "")
+                 text = paste(percent_prod_gs_p,"\n",k_reais(total_gross_sale),sep = "")
              )
       ) +
         geom_col(fill = "steelblue") +
-        scale_y_continuous(labels = scales::percent) +
+        scale_y_continuous(labels = scales::percent,breaks = scales::breaks_width(.25),,limits = c(0,1)) +
         labs(x = 'Quantidade de produtos no pedido',
              y = 'Tamanho do Mercado'),
       tooltip = c('text'))
@@ -624,10 +664,7 @@ server <- function(input, output, session){
       ggplot() +
       geom_sf(aes(fill = gross_sales)) +
       geom_sf_text(aes(label = scales::percent(prop_gross,2))) +
-      geom_sf_text(aes(label = scales::dollar(gross_sales,
-                                              scale = 1/1000,
-                                              suffix = "k",
-                                              largest_with_cents = 0)),nudge_y = .5) +
+      geom_sf_text(aes(label = k_reais(gross_sales)),nudge_y = .5) +
       theme(axis.line = element_blank(),
             axis.text = element_blank(),
             axis.ticks = element_blank(),
@@ -640,9 +677,7 @@ server <- function(input, output, session){
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank()) +
       labs(fill = "Tamanho do Mercado") +
-      scale_fill_distiller(label = scales::dollar_format(scale = 1/1000,
-                                                         suffix = "k",
-                                                         largest_with_cents = 0),
+      scale_fill_distiller(label = k_reais,
                            palette = 'PuBu',direction = 1)
   )
   
@@ -652,9 +687,64 @@ server <- function(input, output, session){
     )
   )
   
+
+# prices quantiles -------------------------------------------------------------------------------------------------------
+
+  output$quantile_quantity <- renderPlotly(
+    ggplotly(ggplot(data = df_quantiles(),aes(x = fct_reorder(score,max_order), y = prop,fill = review_simple,text = paste(n_orders," produtos",
+                                                                                                                 "\n",
+                                                                                                                 scales::percent(prop,.01)," do ",score," quartil",
+                                                                                                                 "\n",
+                                                                                                                 "preço máximo = ",reais(max_order),
+                                                                                                                 "\n",
+                                                                                                                 "preço mínimo = ",reais(min_order),
+                                                                                                                 
+                                                                                                                 sep = ""))) +
+               geom_bar(stat = "identity",
+                        position = "fill") +
+               scale_fill_manual(values = c("steelblue","red")) +
+               scale_y_continuous(breaks = seq(0, 1, .2),label = scales::percent) +
+               labs(x = 'Quartis Preço Total do produto',y = 'Porcentagem',fill = "Nota"),tooltip = "text")
+  )
+  
+  output$quantile_sales <- renderPlotly(
+    ggplotly(ggplot(data = df_quantiles(),aes(x = fct_reorder(score,max_order), y = prop_sales,fill = review_simple,text = paste(k_reais(gross_sales),
+                                                                                                                       "\n",
+                                                                                                                       scales::percent(prop_sales,.01)," do ",score," quartil",
+                                                                                                                       "\n",
+                                                                                                                       "preço máximo = ",reais(max_order),
+                                                                                                                       "\n",
+                                                                                                                       "preço mínimo = ",reais(min_order),
+                                                                                                                       
+                                                                                                                       sep = ""))) +
+               geom_bar(stat = "identity",
+                        position = "fill") +
+               scale_fill_manual(values = c("steelblue","red")) +
+               scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+               labs(x = 'Quartis Preço Total do produto',y = 'Porcentagem',fill = "Nota"),tooltip = "text")
+  )
+  
+  output$density_plot <- renderPlot(
+    df_created_category() %>% 
+    ggplot() +
+      aes(x = total_price,color = review_simple) +
+      geom_density() +
+      scale_color_manual(values = c("steelblue","red")) +
+      labs(y = 'Densidade',x = 'Preço Total do produto',color = 'Nota') +
+      scale_x_log10(labels = reais)
+  )
+  
+  output$header_prices <- renderValueBox(
+    valueBox(paste("Analise de preços totais", input$new_category_name), subtitle = "Preço total = Preço do produto + Frete", icon = NULL,
+             color = "blue"
+    )
+  )
+  
 }
 
 
+
+# shinny app ------------------------------------------------------------------------------------------------------
 
 shinyApp(ui, server)
 

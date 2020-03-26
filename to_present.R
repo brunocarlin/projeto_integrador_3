@@ -339,7 +339,7 @@ p3 <- df_to_plot %>%
   group_by(score) %>% 
   mutate(prop = n_orders/sum(n_orders)) %>% 
   ungroup() %>% 
-  ggplot(aes(x = fct_reorder(score,max_order), y = prop,fill = review_simple)) +
+  ggplot(aes(x = fct_reorder(score,max_order), y = prop,fill = review_simple,text = )) +
   geom_bar(stat = "identity",
            position = "fill") +
   scale_fill_manual(values = c("steelblue","red")) +
@@ -350,20 +350,22 @@ p3 <- df_to_plot %>%
   geom_text(aes(label = min_order),
             size = 10,
             position = position_stack(vjust = .2)) +
-  labs(x = 'Quartis (Preço Total do produto)',y = 'Porcentagem',fill = "Nota") +
+  labs(x = 'Quartis Preço Total do produto (entrega + produto)',y = 'Porcentagem',fill = "Nota") +
   theme(text = element_text(size = 24))
 
 
 p3
+
+ggplotly(p3,tooltip = c("min_order","max"))
 p4 <- df_casa_nova_cust_sudeste %>% 
   ggplot() +
-  aes(x = log(total_price),color = review_simple) +
+  aes(x = total_price,color = review_simple) +
   geom_density() +
   scale_color_manual(values = c("steelblue","red")) +
-  labs(y = 'Densidade',x = 'Log do Preço Total do produto',color = 'Nota') +
-  theme(text = element_text(size = 24))
+  labs(y = 'Densidade',x = 'Preço Total do produto',color = 'Nota') +
+  scale_x_log10()
 
-
+p4
 gridExtra::grid.arrange(p3,p4)
 
 
