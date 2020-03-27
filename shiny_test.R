@@ -5,6 +5,7 @@ library(tidyverse)
 library(plotly)
 library(DT)
 library(shinyWidgets)
+library(scales)
 
 df_customer <- vroom('olist/olist_customers_dataset.csv')
 df_geo <- vroom('olist/olist_geolocation_dataset.csv')
@@ -83,6 +84,18 @@ theme_set(new = theme_minimal())
 
 reais <-  scales::label_dollar(prefix = "R$",big.mark = ".",decimal.mark = ",")
 k_reais <- scales::label_dollar(scale = 1/1000,prefix = "R$",suffix = "k",big.mark = ".",decimal.mark = ",",largest_with_cents = 0)
+
+number_log <- trans_new(name = "number_log",
+                       transform = log10_trans()$transform,
+                       inverse = log10_trans()$inverse,
+                       breaks = breaks_log(),
+                       format = label_dollar())
+
+real_log <- trans_new(name = "real_log",
+                        transform = log10_trans()$transform,
+                        inverse = log10_trans()$inverse,
+                        breaks = breaks_log(),
+                        format = reais)
 
 '%!in%' <- function(x,y)!('%in%'(x,y))
 
@@ -184,24 +197,24 @@ body <- dashboardBody(
       conditionalPanel(condition = "input.var == 'number_products'",
                        fluidRow(
                          column(
-                           width = 4,
-                           plotOutput(outputId = "number_products2")
+                           width = 6,
+                           plotlyOutput(outputId = "number_products2")
                          ),
                          column(
-                           width = 8,
-                           plotOutput(outputId = "number_products3")
+                           width = 6,
+                           plotlyOutput(outputId = "number_products3")
                          )
                        )
       ),
       conditionalPanel(condition = "input.var == 'total_gross_sale'",
                        fluidRow(
                          column(
-                           width = 4,
-                           plotOutput(outputId = "total_gross_sale2")
+                           width = 6,
+                           plotlyOutput(outputId = "total_gross_sale2")
                          ),
                          column(
-                           width = 8,
-                           plotOutput(outputId = "total_gross_sale3")
+                           width = 6,
+                           plotlyOutput(outputId = "total_gross_sale3")
                          )
                        )
       ),
@@ -334,7 +347,8 @@ server <- function(input, output, session){
                                                    mean_price = mean(total_price,na.rm = T),
                                                    number_products = n()) %>% 
                                          group_by(product_category_name) %>%
-                                         mutate(percent_notas = number_products/sum(number_products)))
+                                         mutate(percent_notas = number_products/sum(number_products),
+                                                percent_sales = total_gross_sale/sum(total_gross_sale)))
   
   products_to_use <- reactive(df_gross_sales_category() %>% 
                                 summarise(total_values = sum(number_products)) %>% 
@@ -504,62 +518,73 @@ server <- function(input, output, session){
   
   
   
-  output$total_gross_sale2 <- renderPlot(
-    df_gross_sales_category2() %>%
-      ungroup() %>% 
-      ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas), y = percent_notas,text = number_products,fill = review_simple)) +
+  output$total_gross_sale2 <- renderPlotly(
+      ggplotly(ggplot(data = df_gross_sales_category2(),aes(x = fct_reorder2(product_category_name,review_simple,-percent_sales), y = percent_sales,fill = review_simple,
+                 text =  paste(product_category_name,
+                               "\n",scales::percent(percent_sales,.01), " do faturamento com nota ",review_simple,
+                               "\n",number_products, " produtos",
+                               "\n",k_reais(total_gross_sale), " de faturamento",sep = ""))) +
       geom_bar(stat = "identity",
                position = "fill") +
       scale_fill_manual(values = c("steelblue","red")) +
-      scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
-      geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
+      scale_y_continuous(breaks = seq(0, 1, .2),label = scales::percent) +
+      geom_text(aes(label = scales::percent(percent_sales,accuracy = 2)),
                 position = position_stack(vjust = 0.5)) +
       coord_flip() +
       labs(x = "Categorias", y = "Porcentagem de avaliações") +
-      theme(legend.position = "none")
+      theme(legend.position = "none"),tooltip = "text")
   )
   
-  output$total_gross_sale3 <- renderPlot(
-    df_gross_sales_category2() %>% 
-      ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas),y = total_gross_sale,fill = review_simple)) +
+  output$total_gross_sale3 <- renderPlotly(
+    
+      ggplotly(ggplot(data = df_gross_sales_category2(),aes(x = fct_reorder2(product_category_name,review_simple,-percent_sales),y = total_gross_sale,fill = review_simple,
+                 text = paste(product_category_name,
+                              "\n",scales::percent(percent_sales,.01), " do faturamento com nota ",review_simple,
+                              "\n",number_products, " produtos",
+                              "\n",k_reais(total_gross_sale), " de faturamento",sep = ""))) +
       geom_col() +
       labs(y = "Tamanho do Mercado",fill = 'Nota') +
       theme(axis.title.y=element_blank(),
             axis.text.y=element_blank(),
             axis.ticks.y=element_blank()) +
       coord_flip() +
+      scale_y_continuous(label = k_reais) +
       scale_fill_manual(values = c("steelblue","red")) +
-      scale_y_continuous(labels = k_reais) +
       geom_text(aes(label = k_reais(total_gross_sale)),
-                position = position_stack(vjust = 0.5))
+                position = position_stack(vjust = 0.5)),tooltip = "text")
   )
   
   
 # categories number_products outputs --------------------------------------------------------------------------------------
   
-  
-  output$number_products1 <- renderTable(
-    df_gross_sales_category3()
-  )
-  
-  output$number_products2 <- renderPlot(
-    df_gross_sales_category2() %>%
-      ungroup() %>% 
-      ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas), y = percent_notas,text = number_products,fill = review_simple)) +
-      geom_bar(stat = "identity",
-               position = "fill") +
+  output$number_products2 <- renderPlotly(
+      ggplotly(ggplot(data = df_gross_sales_category2(),
+             aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas),
+                 y = percent_notas,
+                 fill = review_simple,
+                 text = paste(product_category_name,
+                              "\n",scales::percent(percent_notas,.01), " dos produtos com nota ",review_simple,
+                              "\n",number_products, " produtos",
+                              "\n",k_reais(total_gross_sale), " de faturamento",sep = ""))) +
+      geom_col() +
       scale_fill_manual(values = c("steelblue","red")) +
-      scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+      scale_y_continuous(breaks = seq(0, 1, .2),label = scales::percent) +
       geom_text(aes(label = scales::percent(percent_notas,accuracy = 2)),
                 position = position_stack(vjust = 0.5)) +
       coord_flip() +
       labs(x = "Categorias", y = "Porcentagem de avaliações") +
-      theme(legend.position = "none")
+      theme(legend.position = "none"),tooltip = "text")
   )
   
-  output$number_products3 <- renderPlot(
-    df_gross_sales_category2() %>% 
-      ggplot(aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas),y = number_products,fill = review_simple)) +
+  output$number_products3 <- renderPlotly(
+      ggplotly(ggplot(data = df_gross_sales_category2(),
+             aes(x = fct_reorder2(product_category_name,review_simple,-percent_notas),
+                 y = number_products,
+                 fill = review_simple,
+                 text = paste(product_category_name,
+                              "\n",scales::percent(percent_notas,.01), " dos produtos com nota ",review_simple,
+                              "\n",number_products, " produtos",
+                              "\n",k_reais(total_gross_sale), " de faturamento",sep = ""))) +
       geom_col() +
       labs(y = "Número de itens comprados",fill = 'Nota') +
       theme(axis.title.y=element_blank(),
@@ -567,8 +592,9 @@ server <- function(input, output, session){
             axis.ticks.y=element_blank()) +
       coord_flip() +
       scale_fill_manual(values = c("steelblue","red")) +
+      scale_y_continuous(labels = scales::label_comma(big.mark = ".",decimal.mark = ",")) +
       geom_text(aes(label = number_products),
-                position = position_stack(vjust = 0.5))
+                position = position_stack(vjust = 0.5)),tooltip = "text")
   )
   
   # value boxes/ infoBox
@@ -959,7 +985,7 @@ server <- function(input, output, session){
                                                                                                                                                    "\n",
                                                                                                                                                    k_reais(gross_sales), " de faturamento",sep = ""))) +
                geom_col() +
-               scale_y_log10(labels = scales::label_comma(big.mark = ".")) +
+               scale_y_continuous(labels = scales::label_comma(big.mark = ".")) +
                scale_fill_manual(values = c("steelblue","red")) +
                geom_text(aes(label = scales::percent(prop_qnt,accuracy = 2)),
                          position = position_stack(vjust = 0.5)) +
@@ -998,7 +1024,7 @@ server <- function(input, output, session){
                                                                                                                                                          sep = ""))) +
                geom_col() +
                scale_fill_manual(values = c("steelblue","red")) +
-               scale_y_log10(labels = reais) + 
+               scale_y_continuous(labels = k_reais) + 
                geom_text(aes(label = scales::percent(prop_sales,accuracy = 2)),
                          position = position_stack(vjust = 0.5)) +
                coord_flip() +
