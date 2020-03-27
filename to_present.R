@@ -257,14 +257,14 @@ df_casa_nova_cust_pre <- df_casa_nova_cust %>%
   summarise(n_orders = n()) %>% 
   mutate(prop = n_orders/sum(n_orders))
 
-df_state <-  df_orders_itens_reviews_payments_products_customer %>% 
+df_state <-  df_orders_itens_reviews_payments_products_customer %>%
   group_by(Estado) %>% 
   summarise(n_orders = n(),gross_sales = sum(total_price)) %>% 
   mutate(prop = n_orders/sum(n_orders),
          nome = Estado %>% str_to_upper(),
          prop_gross = gross_sales/sum(gross_sales),
          label_prod = paste(scales::percent(prop,2),
-                            n_orders))
+                            n_orders)) %>% 
 
 
 br_maps_3 <- br_maps_2 %>% 
