@@ -211,7 +211,8 @@ br_maps <- brazilmaps::get_brmap("State")
 
 br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
-br_maps_2 <- br_maps %>% 
+br_maps_2 <- br_maps %>%
+  as.data.frame() %>% 
   left_join(br_sigla %>% mutate(Estado = Estado %>% str_to_upper),by = c("nome" ="Estado")) %>% 
   rename(customer_state = Sigla)
 # join customer -----------------------------------------------------------
@@ -264,7 +265,7 @@ df_state <-  df_orders_itens_reviews_payments_products_customer %>%
          nome = Estado %>% str_to_upper(),
          prop_gross = gross_sales/sum(gross_sales),
          label_prod = paste(scales::percent(prop,2),
-                            n_orders)) %>% 
+                            n_orders))
 
 
 br_maps_3 <- br_maps_2 %>% 
