@@ -118,14 +118,14 @@ sidebar <- dashboardSidebar(sidebarMenu(
   menuItem(
     "Pedidos",
     tabName = "pies",
-    icon = icon("chart-pie")
+    icon = icon("shopping-basket")
   ),
   menuItem(
     "Regiões do Brasil",
     icon = icon("map"),
-    menuSubItem(text = paste(emo::ji('Brazil'),'Todas as Notas',emo::ji('Brazil')),tabName = "maps"),
-    menuSubItem(text = paste(emo::ji('angry'),'Notas Baixas',emo::ji('angry')),tabName = "maps_low"),
-    menuSubItem(text = paste(emo::ji('smile'),'Notal Altas',emo::ji('smile')),tabName = "maps_high")
+    menuSubItem(text = paste(emo::ji('Brazil'),'Todas as Notas',emo::ji('Brazil')),tabName = "maps",icon = NULL),
+    menuSubItem(text = paste(emo::ji('angry'),'Notas Baixas',emo::ji('angry')),tabName = "maps_low",icon = NULL),
+    menuSubItem(text = paste(emo::ji('smile'),'Notal Altas',emo::ji('smile')),tabName = "maps_high",icon = NULL)
   ),
   menuItem(
     "Preços",
