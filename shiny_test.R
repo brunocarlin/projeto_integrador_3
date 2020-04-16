@@ -158,7 +158,7 @@ sidebar <- dashboardSidebar(sidebarMenu(
               multiple = TRUE,selected = c('cama_mesa_banho',
                                            'moveis_decoracao',
                                            'moveis_escritorio'),selectize = T),
-  sliderInput("range", "Precos",round = TRUE,
+  sliderInput("range", "Preços",round = TRUE,
               min = min(df_orders_itens_reviews_payments_products_customer$total_price), max = max(df_orders_itens_reviews_payments_products_customer$total_price),
               value = c(min(df_orders_itens_reviews_payments_products_customer$total_price),
                         max(df_orders_itens_reviews_payments_products_customer$total_price)

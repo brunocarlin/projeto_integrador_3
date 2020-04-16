@@ -413,3 +413,129 @@ df_to_plot %>%
   scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
   labs(x = "Meio de pagamento",y = 'Quantidade de meios de pagamento',fill = "Quantidade de compras") +
   theme(text = element_text(size = 16))
+
+# testing variables -------------------------------------------------------
+
+df_casa_nova_cust_sudeste %>% names()
+
+df_to_plot <- df_casa_nova_cust_sudeste %>% 
+  mutate(probabilidade_quantil = product_description_lenght %>% ntile(10000),
+         score = case_when(probabilidade_quantil < 1000 ~ '1º',
+                           probabilidade_quantil >= 1000 & probabilidade_quantil < 2000 ~ '2º',
+                           probabilidade_quantil >= 2000 & probabilidade_quantil < 3000 ~ '3º',
+                           probabilidade_quantil >= 3000 & probabilidade_quantil < 4000 ~ '4º',
+                           probabilidade_quantil >= 4000 & probabilidade_quantil < 5000 ~ '5º',
+                           probabilidade_quantil >= 5000 & probabilidade_quantil < 6000 ~ '6º',
+                           probabilidade_quantil >= 6000 & probabilidade_quantil < 7000 ~ '7º',
+                           probabilidade_quantil >= 7000 & probabilidade_quantil < 8000 ~ '8º',
+                           probabilidade_quantil >= 8000 & probabilidade_quantil < 9500 ~ '9º',
+                           probabilidade_quantil >= 9000 ~ '10º'))
+
+
+p3 <- df_to_plot %>% 
+  group_by(score,review_simple) %>% 
+  summarise(n_orders = n(),
+            min_order = min(product_description_lenght),
+            max_order = max(product_description_lenght)) %>% 
+  group_by(score) %>% 
+  mutate(prop = n_orders/sum(n_orders)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder(score,max_order), y = prop,fill = review_simple,text = )) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = max_order),
+            size = 10,
+            position = position_stack(vjust = .8)) +
+  geom_text(aes(label = min_order),
+            size = 10,
+            position = position_stack(vjust = .2)) +
+  labs(x = 'product_description_lenght',y = 'Porcentagem',fill = "Nota") +
+  theme(text = element_text(size = 24))
+
+
+p3
+
+
+
+
+df_to_plot <- df_casa_nova_cust_sudeste %>% 
+  mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1 foto",
+                                   product_photos_qty > 1 & product_photos_qty <=6 ~ "2-6 fotos",
+                                   product_photos_qty > 6 ~ "6+ fotos"))
+
+
+p3 <- df_to_plot %>% 
+  group_by(bucket_photos,review_simple) %>% 
+  summarise(n_orders = n(),
+            min_order = min(product_photos_qty),
+            max_order = max(product_photos_qty)) %>% 
+  group_by(bucket_photos) %>% 
+  mutate(prop = n_orders/sum(n_orders)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder(bucket_photos,max_order), y = prop,fill = review_simple,text = )) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = max_order),
+            size = 10,
+            position = position_stack(vjust = .8)) +
+  geom_text(aes(label = min_order),
+            size = 10,
+            position = position_stack(vjust = .2)) +
+  labs(x = 'product_description_lenght',y = 'Porcentagem',fill = "Nota") +
+  theme(text = element_text(size = 24))
+
+
+p3
+
+
+df_test <- df_casa_nova_cust_sudeste %>% 
+  mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1 foto",
+                                   product_photos_qty > 1 & product_photos_qty <=6 ~ "2-6 fotos",
+                                   product_photos_qty > 6 ~ "6+ fotos"),
+         probabilidade_quantil = product_description_lenght %>% ntile(10000),
+         quantil = case_when(probabilidade_quantil < 1000 ~ '1º',
+                           probabilidade_quantil >= 1000 & probabilidade_quantil < 2000 ~ '2º',
+                           probabilidade_quantil >= 2000 & probabilidade_quantil < 3000 ~ '3º',
+                           probabilidade_quantil >= 3000 & probabilidade_quantil < 4000 ~ '4º',
+                           probabilidade_quantil >= 4000 & probabilidade_quantil < 5000 ~ '5º',
+                           probabilidade_quantil >= 5000 & probabilidade_quantil < 6000 ~ '6º',
+                           probabilidade_quantil >= 6000 & probabilidade_quantil < 7000 ~ '7º',
+                           probabilidade_quantil >= 7000 & probabilidade_quantil < 8000 ~ '8º',
+                           probabilidade_quantil >= 8000 & probabilidade_quantil < 9500 ~ '9º',
+                           probabilidade_quantil >= 9000 ~ '10º') %>%
+           as_factor() %>% 
+           forcats::fct_relevel("1º","2º","3º","4º","5º","6º","7º","8º","9º","10º")) 
+
+
+
+df_test %>% 
+  group_by(bucket_photos,quantil,review_simple) %>%
+  summarise(n_orders = n(),
+            gross_sales = sum(total_price)) %>% 
+  group_by(bucket_photos,quantil) %>% 
+  mutate(prop = n_orders/sum(n_orders),
+         prop_sales = gross_sales/sum(gross_sales)) %>% 
+  filter(review_simple == "alta") %>% 
+  plot_ly(x= ~bucket_photos,y = ~quantil,z = ~prop,type = "heatmap",colors = colorRamp(c("white", "steelblue")),
+          text = ~paste("gross_sales: ",gross_sales,"\n",
+                        "num: ",n_orders))
+
+
+df_test %>% 
+  group_by(bucket_photos,quantil,review_simple) %>%
+  summarise(n_orders = n(),
+            gross_sales = sum(total_price)) %>% 
+  group_by(bucket_photos,quantil) %>% 
+  mutate(prop = n_orders/sum(n_orders),
+         prop_sales = gross_sales/sum(gross_sales)) %>% 
+  filter(review_simple == "alta") %>% 
+  arrange(prop_sales) %>% 
+  head(1) %>% 
+  pull(bucket_photos)
+
+
+
