@@ -21,7 +21,7 @@ br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
 br_maps <- brazilmaps::get_brmap("State")
 
-# join itens ordens -----------------------------------------------------------------------------------------------
+# join itens ordens ----------------------------------------------------------------------------------------------------
 
 
 df_orders_itens <- df_orders %>% 
@@ -32,7 +32,7 @@ df_orders_itens <- df_orders %>%
 
 
 
-# join reviews ----------------------------------------------------------------------------------------------------
+# join reviews ---------------------------------------------------------------------------------------------------------
 
 df_order_reviews2 <- df_order_reviews %>% 
   group_by(order_id) %>% 
@@ -45,7 +45,7 @@ df_orders_itens_reviews <- df_orders_itens %>%
   filter(review_score %>% is.na %>% `!`)
 
 
-# join payments ---------------------------------------------------------------------------------------------------
+# join payments --------------------------------------------------------------------------------------------------------
 
 df_order_payments2 <- df_order_payments %>% 
   group_by(order_id,payment_type) %>% 
@@ -65,25 +65,30 @@ df_orders_itens_reviews_payments <- df_orders_itens_reviews %>%
   left_join(df_order_payments3)
 
 
-# join products ---------------------------------------------------------------------------------------------------
+# join products --------------------------------------------------------------------------------------------------------
 
 
 df_orders_itens_reviews_payments_products <- df_orders_itens_reviews_payments %>%
   left_join(df_products)
 
-# join customer ---------------------------------------------------------------------------------------------------
+# join customer --------------------------------------------------------------------------------------------------------
 
 df_orders_itens_reviews_payments_products_customer <- df_orders_itens_reviews_payments_products %>% 
   left_join(df_customer) %>% 
   left_join(br_sigla,by = c('customer_state' = 'Sigla'))
 
-# theme set -------------------------------------------------------------------------------------------------------
+# theme set ------------------------------------------------------------------------------------------------------------
 
 
 theme_set(new = theme_minimal())
 
 reais <-  scales::label_dollar(prefix = "R$",big.mark = ".",decimal.mark = ",")
-k_reais <- scales::label_dollar(scale = 1/1000,prefix = "R$",suffix = "k",big.mark = ".",decimal.mark = ",",largest_with_cents = 0)
+k_reais <- scales::label_dollar(scale = 1/1000,
+                                prefix = "R$",
+                                suffix = "k",
+                                big.mark = ".",
+                                decimal.mark = ",",
+                                largest_with_cents = 0)
 
 number_log <- trans_new(name = "number_log",
                        transform = log10_trans()$transform,
@@ -99,15 +104,15 @@ real_log <- trans_new(name = "real_log",
 
 '%!in%' <- function(x,y)!('%in%'(x,y))
 
-# shiny structure -------------------------------------------------------------------------------------------------
+# shiny structure ------------------------------------------------------------------------------------------------------
 
 
-# header ----------------------------------------------------------------------------------------------------------
+# header ---------------------------------------------------------------------------------------------------------------
 
 header <- dashboardHeader(title = "Presentation Data Science")
 
 
-# sidebar ---------------------------------------------------------------------------------------------------------
+# sidebar --------------------------------------------------------------------------------------------------------------
 
 sidebar <- dashboardSidebar(sidebarMenu(
   menuItem(
@@ -147,19 +152,25 @@ sidebar <- dashboardSidebar(sidebarMenu(
   radioButtons(
     "var",
     NULL,
-    choiceNames = list("Valor", "Quantidade"),
-    choiceValues = list("total_gross_sale", "number_products")
+    choiceNames = list("Quantidade", "Valor"),
+    choiceValues = list("number_products", "total_gross_sale")
   ),
-  selectInput("region_brasil", "Regiões do Brasil", choices = setNames(df_orders_itens_reviews_payments_products_customer$Region %>% unique(),c("Sudeste","Nordeste",
-                                                                                                                                                "Centro-Oeste","Sul","Norte")),
+  selectInput("region_brasil",
+              "Regiões do Brasil",
+              choices = setNames(df_orders_itens_reviews_payments_products_customer$Region %>%
+                                   unique(),
+                                 c("Sudeste","Nordeste","Centro-Oeste","Sul","Norte")),
               multiple = TRUE,selected = 'Southeast',selectize = T),
   textInput("new_category_name","Nome da nova categoria",value = "casa_nova"),
-  selectInput("category_name", "Categorias", choices = df_orders_itens_reviews_payments_products_customer$product_category_name %>% unique(),
+  selectInput("category_name",
+              "Categorias",
+              choices = df_orders_itens_reviews_payments_products_customer$product_category_name %>% unique(),
               multiple = TRUE,selected = c('cama_mesa_banho',
                                            'moveis_decoracao',
                                            'moveis_escritorio'),selectize = T),
   sliderInput("range", "Preços",round = TRUE,
-              min = min(df_orders_itens_reviews_payments_products_customer$total_price), max = max(df_orders_itens_reviews_payments_products_customer$total_price),
+              min = min(df_orders_itens_reviews_payments_products_customer$total_price),
+              max = max(df_orders_itens_reviews_payments_products_customer$total_price),
               value = c(min(df_orders_itens_reviews_payments_products_customer$total_price),
                         max(df_orders_itens_reviews_payments_products_customer$total_price)
               )
@@ -178,15 +189,15 @@ sidebar <- dashboardSidebar(sidebarMenu(
 ))
 
 
-# body ------------------------------------------------------------------------------------------------------------
+# body -----------------------------------------------------------------------------------------------------------------
 
 body <- dashboardBody(
   tabItems(
     
-    # tabs ------------------------------------------------------------------------------------------------------------
+    # tabs -------------------------------------------------------------------------------------------------------------
     tabItem(
       
-# categories ------------------------------------------------------------------------------------------------------
+# categories -----------------------------------------------------------------------------------------------------------
       tabName = "categories",
       fluidRow(valueBoxOutput("titulo", width = 12)),
       fluidRow(
@@ -222,7 +233,7 @@ body <- dashboardBody(
       
     ),
     
-# pies ------------------------------------------------------------------------------------------------------------
+# pies -----------------------------------------------------------------------------------------------------------------
     tabItem(
       tabName = "pies",
       fluidRow(valueBoxOutput("header_pie_chart", width = 12)),
@@ -258,7 +269,7 @@ body <- dashboardBody(
       )
     ),
     
-# maps --------------------------------------------------------------------------------------------------------
+# maps -----------------------------------------------------------------------------------------------------------------
     tabItem(tabName = "maps",
             fluidRow(valueBoxOutput("header_map_charts", width = 12)),
             conditionalPanel(condition = "input.var == 'number_products'",
@@ -282,7 +293,7 @@ body <- dashboardBody(
     ),
     
     
-# prices ----------------------------------------------------------------------------------------------------------
+# prices ---------------------------------------------------------------------------------------------------------------
     tabItem(tabName = "prices",
             fluidRow(valueBoxOutput(outputId = "header_prices",width = 12)),
             conditionalPanel(
@@ -296,7 +307,7 @@ body <- dashboardBody(
             fluidRow(plotOutput("density_plot"))
     ),
 
-# payment methods -------------------------------------------------------------------------------------------------
+# payment methods ------------------------------------------------------------------------------------------------------
 
     tabItem(tabName = "payment_methods",
             fluidRow(valueBoxOutput(outputId = "header_payment_methods",width = 12)),
@@ -324,7 +335,7 @@ ui <- dashboardPage(header, sidebar, body, skin = "blue")
 server <- function(input, output, session){
   
   
-# reactive data ---------------------------------------------------------------------------------------------------
+# reactive data --------------------------------------------------------------------------------------------------------
   
   
   
@@ -358,11 +369,13 @@ server <- function(input, output, session){
                                 pull(product_category_name))
   
   
-  df_gross_sales_category2 <- reactive(df_gross_sales_category() %>% filter(product_category_name %in% products_to_use()))
+  df_gross_sales_category2 <- reactive(df_gross_sales_category() %>%
+                                         filter(product_category_name %in% products_to_use()))
   
   df_gross_sales_category3 <- reactive(df_gross_sales_category2() %>%
                                          group_by(product_category_name, review_simple, percent_notas) %>%
-                                         summarise_all(sum) %>% pivot_wider(names_from = review_simple, values_from = percent_notas) %>%
+                                         summarise_all(sum) %>% pivot_wider(names_from = review_simple,
+                                                                            values_from = percent_notas) %>%
                                          summarise(
                                            total_gross_sale = sum(total_gross_sale),
                                            number_products = sum(number_products),
@@ -397,7 +410,9 @@ server <- function(input, output, session){
                              summarise(total_gross_sale = sum(total_price,na.rm = T),
                                        mean_price = mean(total_price,na.rm = T),
                                        number_products = n()) %>%
-                             mutate(bucket_itens = if_else(number_products >= 3,'3 ou mais',number_products %>% as.character())) %>% 
+                             mutate(bucket_itens = if_else(number_products >= 3,
+                                                           '3 ou mais',
+                                                           number_products %>% as.character())) %>% 
                              group_by(review_simple,bucket_itens) %>% 
                              summarise(number_products = n(),total_gross_sale = sum(total_gross_sale)) %>% 
                              group_by(bucket_itens) %>% 
@@ -463,21 +478,22 @@ server <- function(input, output, session){
   
   
   
-  df_quantiles <- reactive(df_created_category() %>%
-                             mutate(probabilidade_quantil = total_price %>% ntile(10000),
-                                    score = case_when(probabilidade_quantil < 2500 ~ 'primeiro',
-                                                      probabilidade_quantil >= 2500 & probabilidade_quantil < 5000 ~ 'segundo',
-                                                      probabilidade_quantil >= 5000 & probabilidade_quantil < 7500 ~ 'terceiro',
-                                                      probabilidade_quantil >= 7500 ~ 'quarto')) %>% 
-                             group_by(score,review_simple) %>% 
-                             summarise(n_orders = n(),
-                                       gross_sales = sum(total_price),
-                                       min_order = min(total_price),
-                                       max_order = max(total_price)) %>% 
-                             group_by(score) %>% 
-                             mutate(prop = n_orders/sum(n_orders),
-                                    prop_sales = gross_sales/sum(gross_sales)) %>% 
-                             ungroup())
+  df_quantiles <- reactive(
+    df_created_category() %>%
+       mutate(probabilidade_quantil = total_price %>% ntile(10000),
+              score = case_when(probabilidade_quantil < 2500 ~ 'primeiro',
+                                probabilidade_quantil >= 2500 & probabilidade_quantil < 5000 ~ 'segundo',
+                                probabilidade_quantil >= 5000 & probabilidade_quantil < 7500 ~ 'terceiro',
+                                probabilidade_quantil >= 7500 ~ 'quarto')) %>% 
+       group_by(score,review_simple) %>% 
+       summarise(n_orders = n(),
+                 gross_sales = sum(total_price),
+                 min_order = min(total_price),
+                 max_order = max(total_price)) %>% 
+       group_by(score) %>% 
+       mutate(prop = n_orders/sum(n_orders),
+              prop_sales = gross_sales/sum(gross_sales)) %>% 
+       ungroup())
   
   df_payments <- reactive(df_created_category() %>% 
     select(review_simple,credit_card,boleto,voucher,debit_card) %>% 
@@ -492,7 +508,7 @@ server <- function(input, output, session){
   
   
   
-# server outputs --------------------------------------------------------------------------------------------------
+# server outputs -------------------------------------------------------------------------------------------------------
   
   
   output$titulo <- renderValueBox(
@@ -514,16 +530,20 @@ server <- function(input, output, session){
     ),
     extensions = c('Buttons',"Responsive")
   )
-# categories total_gross_sale outputs ----------------------------------------------------------------------------------------
+# categories total_gross_sale outputs ----------------------------------------------------------------------------------
   
   
   
   output$total_gross_sale2 <- renderPlotly(
-      ggplotly(ggplot(data = df_gross_sales_category2(),aes(x = fct_reorder2(product_category_name,review_simple,-percent_sales), y = percent_sales,fill = review_simple,
-                 text =  paste(product_category_name,
-                               "\n",scales::percent(percent_sales,.01), " do faturamento com nota ",review_simple,
-                               "\n",number_products, " produtos",
-                               "\n",k_reais(total_gross_sale), " de faturamento",sep = ""))) +
+      ggplotly(
+        ggplot(data = df_gross_sales_category2(),
+               aes(x = fct_reorder2(product_category_name,review_simple,-percent_sales),
+                   y = percent_sales,fill = review_simple,
+                   text =  paste(product_category_name,"\n",
+                                 scales::percent(percent_sales,.01), " do faturamento com nota ",review_simple,"\n",
+                                 number_products, " produtos", "\n",
+                                 k_reais(total_gross_sale), " de faturamento",
+                                 sep = ""))) +
       geom_bar(stat = "identity",
                position = "fill") +
       scale_fill_manual(values = c("steelblue","red")) +
@@ -537,11 +557,14 @@ server <- function(input, output, session){
   
   output$total_gross_sale3 <- renderPlotly(
     
-      ggplotly(ggplot(data = df_gross_sales_category2(),aes(x = fct_reorder2(product_category_name,review_simple,-percent_sales),y = total_gross_sale,fill = review_simple,
-                 text = paste(product_category_name,
-                              "\n",scales::percent(percent_sales,.01), " do faturamento com nota ",review_simple,
-                              "\n",number_products, " produtos",
-                              "\n",k_reais(total_gross_sale), " de faturamento",sep = ""))) +
+      ggplotly(ggplot(data = df_gross_sales_category2(),
+                      aes(x = fct_reorder2(product_category_name,review_simple,-percent_sales),
+                          y = total_gross_sale,fill = review_simple,
+                 text = paste(product_category_name, "\n",
+                              scales::percent(percent_sales,.01), " do faturamento com nota ",review_simple, "\n",
+                              number_products, " produtos", "\n",
+                              k_reais(total_gross_sale), " de faturamento",
+                              sep = ""))) +
       geom_col() +
       labs(y = "Tamanho do Mercado",fill = 'Nota') +
       theme(axis.title.y=element_blank(),
@@ -555,7 +578,7 @@ server <- function(input, output, session){
   )
   
   
-# categories number_products outputs --------------------------------------------------------------------------------------
+# categories number_products outputs -----------------------------------------------------------------------------------
   
   output$number_products2 <- renderPlotly(
       ggplotly(ggplot(data = df_gross_sales_category2(),
@@ -693,7 +716,7 @@ server <- function(input, output, session){
     
 })
 
-# pie market ------------------------------------------------------------------------------------------------------
+# pie market -----------------------------------------------------------------------------------------------------------
 
   output$pie_chart_low2 <- renderPlotly(
     df_pie_chart() %>% 
@@ -760,7 +783,7 @@ server <- function(input, output, session){
     
   })
   
-# maps ------------------------------------------------------------------------------------------------------------
+# maps -----------------------------------------------------------------------------------------------------------------
   
   output$plot_map1 <- renderPlot(
     df_map() %>% sf::st_sf() %>% 
@@ -898,18 +921,17 @@ server <- function(input, output, session){
   )
   
 
-# prices quantiles -------------------------------------------------------------------------------------------------------
+# prices quantiles -----------------------------------------------------------------------------------------------------
 
   output$quantile_quantity <- renderPlotly(
-    ggplotly(ggplot(data = df_quantiles(),aes(x = fct_reorder(score,max_order), y = prop,fill = review_simple,text = paste(n_orders," produtos",
-                                                                                                                 "\n",
-                                                                                                                 scales::percent(prop,.01)," do ",score," quartil",
-                                                                                                                 "\n",
-                                                                                                                 "preço máximo = ",reais(max_order),
-                                                                                                                 "\n",
-                                                                                                                 "preço mínimo = ",reais(min_order),
-                                                                                                                 
-                                                                                                                 sep = ""))) +
+    ggplotly(ggplot(data = df_quantiles(),aes(x = fct_reorder(score,max_order),
+                                              y = prop,
+                                              fill = review_simple,
+                                              text = paste(n_orders," produtos","\n",
+                                                           scales::percent(prop,.01)," do ",score," quartil","\n",
+                                                           "preço máximo = ",reais(max_order),"\n",
+                                                           "preço mínimo = ",reais(min_order),
+                                                           sep = ""))) +
                geom_bar(stat = "identity",
                         position = "fill") +
                scale_fill_manual(values = c("steelblue","red")) +
@@ -918,15 +940,15 @@ server <- function(input, output, session){
   )
   
   output$quantile_sales <- renderPlotly(
-    ggplotly(ggplot(data = df_quantiles(),aes(x = fct_reorder(score,max_order), y = prop_sales,fill = review_simple,text = paste(k_reais(gross_sales),
-                                                                                                                       "\n",
-                                                                                                                       scales::percent(prop_sales,.01)," do ",score," quartil",
-                                                                                                                       "\n",
-                                                                                                                       "preço máximo = ",reais(max_order),
-                                                                                                                       "\n",
-                                                                                                                       "preço mínimo = ",reais(min_order),
-                                                                                                                       
-                                                                                                                       sep = ""))) +
+    ggplotly(ggplot(data = df_quantiles(),
+                    aes(x = fct_reorder(score,max_order),
+                        y = prop_sales,
+                        fill = review_simple,
+                        text = paste(k_reais(gross_sales), "\n",
+                                     scales::percent(prop_sales,.01)," do ",score," quartil","\n",
+                                     "preço máximo = ",reais(max_order),"\n",
+                                     "preço mínimo = ",reais(min_order),
+                                     sep = ""))) +
                geom_bar(stat = "identity",
                         position = "fill") +
                scale_fill_manual(values = c("steelblue","red")) +
@@ -945,13 +967,15 @@ server <- function(input, output, session){
   )
   
   output$header_prices <- renderValueBox(
-    valueBox(paste("Analise de preços totais", input$new_category_name), subtitle = "Preço total = Preço do produto + Frete", icon = NULL,
+    valueBox(paste("Analise de preços totais", input$new_category_name),
+             subtitle = "Preço total = Preço do produto + Frete",
+             icon = NULL,
              color = "blue"
     )
   )
 
 
-# payment methods -------------------------------------------------------------------------------------------------
+# payment methods ------------------------------------------------------------------------------------------------------
   output$header_payment_methods <- renderValueBox(
     valueBox(paste("Análise de Meio de pagamento", input$new_category_name),subtitle = NULL, icon = NULL,
              color = "blue"
@@ -959,13 +983,15 @@ server <- function(input, output, session){
   )
   
   output$payment_methods_qnt1 <- renderPlotly(
-    ggplotly(ggplot(data = df_payments(),aes(x = fct_reorder2(payment_method,review_simple,-prop_qnt), y = prop_qnt,fill = review_simple,text = paste(payment_method,
-                                                                                                                                                    "\n",
-                                                                                                                                                    scales::percent(prop_qnt,.01), " dos produtos com nota ",review_simple,
-                                                                                                                                                    "\n",
-                                                                                                                                                    n_count, " produtos",
-                                                                                                                                                    "\n",
-                                                                                                                                                    k_reais(gross_sales), " de faturamento",sep = ""))) +
+    ggplotly(ggplot(data = df_payments(),
+                    aes(x = fct_reorder2(payment_method,review_simple,-prop_qnt),
+                        y = prop_qnt,
+                        fill = review_simple,
+                        text = paste(payment_method,"\n",
+                                     scales::percent(prop_qnt,.01), " dos produtos com nota ",review_simple,"\n",
+                                     n_count, " produtos","\n",
+                                     k_reais(gross_sales), " de faturamento",
+                                     sep = ""))) +
                geom_col() +
                scale_fill_manual(values = c("steelblue","red")) +
                scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
@@ -977,13 +1003,16 @@ server <- function(input, output, session){
   )
   
   output$payment_methods_qnt2 <- renderPlotly(
-    ggplotly(ggplot(data = df_payments(),aes(x = fct_reorder2(payment_method,review_simple,-prop_qnt), y = n_count,fill = review_simple,text = paste(payment_method,
-                                                                                                                                                   "\n",
-                                                                                                                                                   scales::percent(prop_qnt,.01), " dos produtos com nota ",review_simple,
-                                                                                                                                                   "\n",
-                                                                                                                                                   n_count, " produtos",
-                                                                                                                                                   "\n",
-                                                                                                                                                   k_reais(gross_sales), " de faturamento",sep = ""))) +
+    ggplotly(
+      ggplot(data = df_payments(),
+             aes(x = fct_reorder2(payment_method,review_simple,-prop_qnt),
+                 y = n_count,
+                 fill = review_simple,
+                 text = paste(payment_method,"\n",
+                              scales::percent(prop_qnt,.01), " dos produtos com nota ",review_simple,"\n",
+                              n_count, " produtos","\n",
+                              k_reais(gross_sales), " de faturamento",
+                              sep = ""))) +
                geom_col() +
                scale_y_continuous(labels = scales::label_comma(big.mark = ".")) +
                scale_fill_manual(values = c("steelblue","red")) +
@@ -995,14 +1024,15 @@ server <- function(input, output, session){
   )
   
   output$payment_methods_sales1 <- renderPlotly(
-    ggplotly(ggplot(data = df_payments(),aes(x = fct_reorder2(payment_method,review_simple,-prop_sales), y = prop_sales,fill = review_simple,text = paste(payment_method,
-                                                                                                                                                        "\n",
-                                                                                                                                                        scales::percent(prop_sales,.01)," do faturamento com nota ",review_simple,
-                                                                                                                                                        "\n",
-                                                                                                                                                        n_count, " produtos",
-                                                                                                                                                        "\n",
-                                                                                                                                                        k_reais(gross_sales), " de faturamento",
-                                                                                                                                                        sep = ""))) +
+    ggplotly(ggplot(data = df_payments(),
+                    aes(x = fct_reorder2(payment_method,review_simple,-prop_sales),
+                        y = prop_sales,
+                        fill = review_simple,
+                        text = paste(payment_method,"\n",
+                                     scales::percent(prop_sales,.01)," do faturamento com nota ",review_simple,"\n",
+                                                          n_count, " produtos", "\n",
+                                                          k_reais(gross_sales), " de faturamento",
+                                                          sep = ""))) +
                geom_col() +
                scale_fill_manual(values = c("steelblue","red")) +
                scale_y_continuous(breaks = seq(0, 1, .2),label = scales::percent) +
@@ -1014,14 +1044,15 @@ server <- function(input, output, session){
   )
   
   output$payment_methods_sales2 <- renderPlotly(
-    ggplotly(ggplot(data = df_payments(),aes(x = fct_reorder2(payment_method,review_simple,-prop_sales), y = gross_sales,fill = review_simple,text = paste(payment_method,
-                                                                                                                                                         "\n",
-                                                                                                                                                         scales::percent(prop_sales,.01)," do faturamento com nota ",review_simple,
-                                                                                                                                                         "\n",
-                                                                                                                                                         n_count, " produtos",
-                                                                                                                                                         "\n",
-                                                                                                                                                         k_reais(gross_sales), " de faturamento",
-                                                                                                                                                         sep = ""))) +
+    ggplotly(ggplot(data = df_payments(),
+                    aes(x = fct_reorder2(payment_method,review_simple,-prop_sales),
+                        y = gross_sales,
+                        fill = review_simple,
+                        text = paste(payment_method,"\n",
+                                     scales::percent(prop_sales,.01)," do faturamento com nota ",review_simple,"\n",
+                                     n_count, " produtos","\n",
+                                     k_reais(gross_sales), " de faturamento",
+                                     sep = ""))) +
                geom_col() +
                scale_fill_manual(values = c("steelblue","red")) +
                scale_y_continuous(labels = k_reais) + 
@@ -1036,7 +1067,7 @@ server <- function(input, output, session){
 
 
 
-# shinny app ------------------------------------------------------------------------------------------------------
+# shinny app -----------------------------------------------------------------------------------------------------------
 
 shinyApp(ui, server)
 
