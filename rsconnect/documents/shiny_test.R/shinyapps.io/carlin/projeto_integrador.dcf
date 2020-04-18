@@ -1,0 +1,13 @@
+name: projeto_integrador
+title: projeto_integrador
+username:
+account: carlin
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2141105
+bundleId: 3031434
+url: https://carlin.shinyapps.io/projeto_integrador/
+when: 1587224809.11452
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: comeco_heat_map.R|example_shiny_2.R|import_explore.R|shinny_quick.R|to_present.R

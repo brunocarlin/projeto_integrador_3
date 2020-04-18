@@ -6,6 +6,8 @@ library(plotly)
 library(DT)
 library(shinyWidgets)
 library(scales)
+library(readxl)
+library(sf)
 
 df_customer <- vroom('olist/olist_customers_dataset.csv')
 df_geo <- vroom('olist/olist_geolocation_dataset.csv')
@@ -303,23 +305,23 @@ body <- dashboardBody(
     tabItem(tabName = "maps",
             fluidRow(valueBoxOutput("header_map_charts", width = 12)),
             conditionalPanel(condition = "input.var == 'number_products'",
-                             fluidRow(plotOutput("plot_map1",height = "1200px"))),
+                             fluidRow(plotlyOutput("plot_map1",height = "1200px"))),
             conditionalPanel(condition = "input.var == 'total_gross_sale'",
-                             fluidRow(plotOutput("plot_map2",height = "1200px")))
+                             fluidRow(plotlyOutput("plot_map2",height = "1200px")))
     ),
     
     tabItem(tabName = "maps_low",
             conditionalPanel(condition = "input.var == 'number_products'",
-                             fluidRow(plotOutput("plot_map1_low",height = "1200px"))),
+                             fluidRow(plotlyOutput("plot_map1_low",height = "1200px"))),
             conditionalPanel(condition = "input.var == 'total_gross_sale'",
-                             fluidRow(plotOutput("plot_map2_low",height = "1200px")))
+                             fluidRow(plotlyOutput("plot_map2_low",height = "1200px")))
     ),
     
     tabItem(tabName = "maps_high",
             conditionalPanel(condition = "input.var == 'number_products'",
-                             fluidRow(plotOutput("plot_map1_high",height = "1200px"))),
+                             fluidRow(plotlyOutput("plot_map1_high",height = "1200px"))),
             conditionalPanel(condition = "input.var == 'total_gross_sale'",
-                             fluidRow(plotOutput("plot_map2_high",height = "1200px")))
+                             fluidRow(plotlyOutput("plot_map2_high",height = "1200px")))
     ),
     
     
@@ -528,7 +530,10 @@ server <- function(input, output, session){
                                                    n_orders)))
   
   df_map <- reactive(br_maps %>% 
-                       left_join(df_state(),by = c("nome")))
+                       left_join(df_state(),by = c("nome")) %>% 
+                       as.data.frame() %>% 
+                       sf::st_sf()
+                     )
   
   
   df_state_low <- reactive(df_created_category() %>%
@@ -542,7 +547,10 @@ server <- function(input, output, session){
                                                    n_orders)))
   
   df_map_low <- reactive(br_maps %>% 
-                       left_join(df_state_low(),by = c("nome")))
+                       left_join(df_state_low(),by = c("nome")) %>% 
+                         as.data.frame() %>% 
+                         sf::st_sf()
+                       )
   
   df_state_high <- reactive(df_created_category() %>%
                              filter(review_simple == "alta") %>% 
@@ -555,7 +563,10 @@ server <- function(input, output, session){
                                                        n_orders)))
   
   df_map_high <- reactive(br_maps %>% 
-                           left_join(df_state_high(),by = c("nome")))
+                           left_join(df_state_high(),by = c("nome")) %>% 
+                            as.data.frame() %>% 
+                            sf::st_sf()
+                          )
   
   
   
@@ -1034,9 +1045,8 @@ server <- function(input, output, session){
   
 # maps -----------------------------------------------------------------------------------------------------------------
   
-  output$plot_map1 <- renderPlot(
-    df_map() %>% sf::st_sf() %>% 
-      ggplot() +
+  output$plot_map1 <- renderPlotly(
+    ggplotly(ggplot(data = df_map()) +
       geom_sf(aes(fill = n_orders,geometry = geometry)) +
       geom_sf_text(aes(label = scales::percent(prop,2))) +
       geom_sf_text(aes(label = n_orders),nudge_y = .5) +
@@ -1054,10 +1064,13 @@ server <- function(input, output, session){
             panel.grid.minor = element_blank()) +
       labs(fill = "Quantidade de compras")
   )
+)
   
-  output$plot_map2 <- renderPlot(
-    df_map() %>% sf::st_sf() %>%
-      ggplot() +
+  
+  
+  output$plot_map2 <- renderPlotly(
+   ggplotly(
+      ggplot(data = df_map()) +
       geom_sf(aes(fill = gross_sales)) +
       geom_sf_text(aes(label = scales::percent(prop_gross,2))) +
       geom_sf_text(aes(label = k_reais(gross_sales)),nudge_y = .5) +
@@ -1075,11 +1088,11 @@ server <- function(input, output, session){
       labs(fill = "Tamanho do Mercado") +
       scale_fill_distiller(label = k_reais,
                            palette = 'Purples',direction = 1)
-  )
+  ))
   
-  output$plot_map1_low <- renderPlot(
-    df_map_low() %>% sf::st_sf() %>% 
-      ggplot() +
+  output$plot_map1_low <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_map_low()) +
       geom_sf(aes(fill = n_orders,geometry = geometry)) +
       geom_sf_text(aes(label = scales::percent(prop,2))) +
       geom_sf_text(aes(label = n_orders),nudge_y = .5) +
@@ -1096,11 +1109,11 @@ server <- function(input, output, session){
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank()) +
       labs(fill = "Quantidade de compras")
-  )
+  ))
   
-  output$plot_map2_low <- renderPlot(
-    df_map_low() %>% sf::st_sf() %>%
-      ggplot() +
+  output$plot_map2_low <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_map_low()) +
       geom_sf(aes(fill = gross_sales)) +
       geom_sf_text(aes(label = scales::percent(prop_gross,2))) +
       geom_sf_text(aes(label = k_reais(gross_sales)),nudge_y = .5) +
@@ -1118,11 +1131,11 @@ server <- function(input, output, session){
       labs(fill = "Tamanho do Mercado") +
       scale_fill_distiller(label = k_reais,
                            palette = 'Reds',direction = 1)
-  )
+  ))
   
-  output$plot_map1_high <- renderPlot(
-    df_map_high() %>% sf::st_sf() %>% 
-      ggplot() +
+  output$plot_map1_high <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_map_high()) +
       geom_sf(aes(fill = n_orders,geometry = geometry)) +
       geom_sf_text(aes(label = scales::percent(prop,2))) +
       geom_sf_text(aes(label = n_orders),nudge_y = .5) +
@@ -1139,11 +1152,11 @@ server <- function(input, output, session){
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank()) +
       labs(fill = "Quantidade de compras")
-  )
+  ))
   
-  output$plot_map2_high <- renderPlot(
-    df_map_high() %>% sf::st_sf() %>%
-      ggplot() +
+  output$plot_map2_high <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_map_high()) +
       geom_sf(aes(fill = gross_sales)) +
       geom_sf_text(aes(label = scales::percent(prop_gross,2))) +
       geom_sf_text(aes(label = k_reais(gross_sales)),nudge_y = .5) +
@@ -1161,7 +1174,7 @@ server <- function(input, output, session){
       labs(fill = "Tamanho do Mercado") +
       scale_fill_distiller(label = k_reais,
                            palette = 'Blues',direction = 1)
-  )
+  ))
   
   output$header_map_charts <- renderValueBox(
     valueBox(paste("Mapa da variavel ", input$new_category_name), subtitle = NULL, icon = NULL,
