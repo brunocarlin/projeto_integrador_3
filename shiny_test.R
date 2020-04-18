@@ -325,61 +325,89 @@ body <- dashboardBody(
     
 # prices ---------------------------------------------------------------------------------------------------------------
     tabItem(tabName = "prices",
-            fluidRow(valueBoxOutput(outputId = "header_prices",width = 12)),
-            conditionalPanel(
-              condition = "input.var == 'number_products'",
-              fluidRow(plotlyOutput("quantile_quantity"))
+              fluidRow(valueBoxOutput(outputId = "header_prices",width = 12)),
+              conditionalPanel(
+                condition = "input.var == 'number_products'",
+                fluidRow(plotlyOutput("quantile_quantity"))
+              ),
+              conditionalPanel(
+                condition = "input.var == 'total_gross_sale'",
+                fluidRow(plotlyOutput("quantile_sales"))
+              ),
+              fluidRow(plotOutput("density_plot"))
             ),
-            conditionalPanel(
-              condition = "input.var == 'total_gross_sale'",
-              fluidRow(plotlyOutput("quantile_sales"))
-            ),
-            fluidRow(plotOutput("density_plot"))
-    ),
 
 # payment methods ------------------------------------------------------------------------------------------------------
 
     tabItem(tabName = "payment_methods",
-            fluidRow(valueBoxOutput(outputId = "header_payment_methods",width = 12)),
-            conditionalPanel(
-              condition = "input.var == 'number_products'",
-              fluidRow(
-                column(width = 6, plotlyOutput("payment_methods_qnt1")),
-                column(width = 6, plotlyOutput("payment_methods_qnt2"))
+              fluidRow(valueBoxOutput(outputId = "header_payment_methods",width = 12)),
+              conditionalPanel(
+                condition = "input.var == 'number_products'",
+                fluidRow(
+                  column(width = 6, plotlyOutput("payment_methods_qnt1")),
+                  column(width = 6, plotlyOutput("payment_methods_qnt2"))
+                )
+              ),
+              conditionalPanel(
+                condition = "input.var == 'total_gross_sale'",
+                fluidRow(
+                  column(width = 6,plotlyOutput("payment_methods_sales1")),
+                  column(width = 6,plotlyOutput("payment_methods_sales2"))
+                )
               )
-            ),
-            conditionalPanel(
-              condition = "input.var == 'total_gross_sale'",
-              fluidRow(
-                column(width = 6,plotlyOutput("payment_methods_sales1")),
-                column(width = 6,plotlyOutput("payment_methods_sales2"))
-              )
-            )
-    ),
+          ),
 
 
 
-# announcement -----------------------------------------------------------------------------------------------------
+# announcement ----------------------------------------------------------------------------------------------------
 
     tabItem(tabName = "announcement",
-            fluidRow(valueBoxOutput(outputId = "header_announcement",width = 12)),
+              fluidRow(valueBoxOutput(outputId = "header_announcement",width = 12)),
+              conditionalPanel(
+                condition = "input.var == 'number_products'",
+                fluidRow(plotlyOutput("announcement_qnt1")),
+                fluidRow(plotlyOutput("announcement_qnt2"))
+              ),
+              conditionalPanel(
+                condition = "input.var == 'total_gross_sale'",
+                fluidRow(
+                  column(width = 6,plotlyOutput("announcement_sales1")),
+                  column(width = 6,plotlyOutput("announcement_sales2"))
+                )
+              )
+            ),
+
+# simulator -------------------------------------------------------------------------------------------------------
+
+    tabItem(tabName = "simulator",
+            fluidRow(valueBoxOutput(outputId = "header_simulator",width = 12)),
+            fluidRow(
+              column(width = 4,numericInput("caracteres",label = "Tamanho do texto em caracteres",value = 1000)),
+              column(width = 4,numericInput("fotos",label = "Quantidade de fotos",value = 3)),
+              column(width = 4,numericInput("frete",label = "Custo estimado no frete",value = 2.5))
+              ),
             conditionalPanel(
               condition = "input.var == 'number_products'",
+              fluidRow(textOutput(outputId = "current_situation_quantity")),
+              fluidRow(textOutput(outputId = "possible_situation_quantity")),
               fluidRow(
-                column(width = 6, plotlyOutput("announcement_qnt1")),
-                column(width = 6, plotlyOutput("announcement_qnt2"))
-              )
+                column(width = 8,plotlyOutput("simulator_qnt1")),
+                column(width = 4,plotlyOutput("simulator_qnt2"))
+                )
             ),
             conditionalPanel(
               condition = "input.var == 'total_gross_sale'",
+              fluidRow(textOutput(outputId = "current_situation_sales")),
+              fluidRow(textOutput(outputId = "possible_situation_sales")),
               fluidRow(
-                column(width = 6,plotlyOutput("announcement_sales1")),
-                column(width = 6,plotlyOutput("announcement_sales2"))
+                column(width = 8,plotlyOutput("simulator_sales1")),
+                column(width = 4,plotlyOutput("simulator_sales2"))
               )
-            )
-    ),
+        )
+    )
+)
 
-  )
+    
 )
 
 ui <- dashboardPage(header, sidebar, body, skin = "blue")
@@ -560,22 +588,168 @@ server <- function(input, output, session){
     ungroup())
   
   df_solution <- reactive(df_created_category() %>% 
-    mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1 foto",
-                                     product_photos_qty >= 2 & product_photos_qty <=3 ~ "2-3 fotos",
-                                     product_photos_qty >= 4 & product_photos_qty <=5 ~ "4-5 fotos",
-                                     product_photos_qty >= 6 ~ "6+ fotos"),
+    mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1",
+                                     product_photos_qty >= 2 & product_photos_qty <=3 ~ "2-3",
+                                     product_photos_qty >= 4 & product_photos_qty <=5 ~ "4-5",
+                                     product_photos_qty >= 6 ~ "6+"),
            probabilidade_quantil_desc = product_description_lenght %>% ntile(10000),
-           quantil_desc = case_when(
-             probabilidade_quantil_desc < quantile_6(1) ~ '1º',
-             probabilidade_quantil_desc >= quantile_6(1) & probabilidade_quantil_desc < quantile_6(2) ~ '2º',
-             probabilidade_quantil_desc >= quantile_6(2) & probabilidade_quantil_desc < quantile_6(3) ~ '3º',
-             probabilidade_quantil_desc >= quantile_6(3) & probabilidade_quantil_desc < quantile_6(4) ~ '4º',
-             probabilidade_quantil_desc >= quantile_6(4) & probabilidade_quantil_desc < quantile_6(5) ~ '5º',
-             probabilidade_quantil_desc > quantile_6(5) ~ '6º'
+           quantil_desc = case_when(probabilidade_quantil_desc < quantile_6(1) ~ '1º',
+                                    probabilidade_quantil_desc >= quantile_6(1) & probabilidade_quantil_desc < quantile_6(2) ~ '2º',
+                                    probabilidade_quantil_desc >= quantile_6(2) & probabilidade_quantil_desc < quantile_6(3) ~ '3º',
+                                    probabilidade_quantil_desc >= quantile_6(3) & probabilidade_quantil_desc < quantile_6(4) ~ '4º',
+                                    probabilidade_quantil_desc >= quantile_6(4) & probabilidade_quantil_desc < quantile_6(5) ~ '5º',
+                                    probabilidade_quantil_desc > quantile_6(5) ~ '6º'
            ) %>%
              as_factor() %>% 
              forcats::fct_relevel("1º","2º","3º","4º","5º","6º"))
   )
+  
+  df_photos <- reactive(df_solution() %>% 
+    group_by(bucket_photos,review_simple) %>%
+    summarise(total_gross_sale = sum(total_price,na.rm = T),
+              mean_price = mean(total_price,na.rm = T),
+              number_products = n()) %>% 
+    group_by(bucket_photos) %>%
+    mutate(percent_notas = number_products/sum(number_products),
+           percent_sales = total_gross_sale/sum(total_gross_sale)) %>%
+    ungroup()
+    )
+  
+  df_quantile_desc <- reactive(df_solution() %>% 
+    group_by(quantil_desc,review_simple) %>%
+    summarise(total_gross_sale = sum(total_price,na.rm = T),
+              mean_price = mean(total_price,na.rm = T),
+              number_products = n(),
+              min_caracters_desc = min(product_description_lenght),
+              max_caracters_desc = max(product_description_lenght)) %>% 
+    group_by(quantil_desc) %>%
+    mutate(percent_notas = number_products/sum(number_products),
+           percent_sales = total_gross_sale/sum(total_gross_sale)) %>%
+    ungroup()
+    )
+  
+  
+  df_solution_2 <- reactive(df_solution() %>% 
+    group_by(bucket_photos,quantil_desc,review_simple) %>%
+    summarise(total_gross_sale = sum(total_price,na.rm = T),
+              number_products = n(),
+              total_caracters_desc = sum(product_description_lenght),
+              min_caracters_desc = min(product_description_lenght),
+              max_caracters_desc= max(product_description_lenght)) %>% 
+    mutate(multiplier = if_else(review_simple == "alta",1,0)) %>% 
+    group_by(bucket_photos,quantil_desc) %>%
+    summarise(gross_sales1 = sum(total_gross_sale),
+              total_number_products = sum(number_products),
+              prop_quantity = sum(number_products * multiplier)/total_number_products,
+              prop_sales = sum(total_gross_sale * multiplier)/gross_sales1,
+              mean_caracters_desc = sum(total_caracters_desc)/total_number_products,
+              min_caracters_desc = min(min_caracters_desc) + 1,
+              max_caracters_desc= max(max_caracters_desc)) %>% 
+    ungroup())
+  
+  simulated <- reactive(
+    df_solution() %>% 
+    select(product_photos_qty,product_description_lenght) %>% 
+    add_row(product_photos_qty = input$fotos,product_description_lenght = input$caracteres) %>%
+    mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1",
+                                     product_photos_qty >= 2 & product_photos_qty <=3 ~ "2-3",
+                                     product_photos_qty >= 4 & product_photos_qty <=5 ~ "4-5",
+                                     product_photos_qty >= 6 ~ "6+"),
+           probabilidade_quantil_desc = product_description_lenght %>% ntile(10000),
+           quantil_desc = case_when(probabilidade_quantil_desc < quantile_6(1) ~ '1º',
+                                    probabilidade_quantil_desc >= quantile_6(1) & probabilidade_quantil_desc < quantile_6(2) ~ '2º',
+                                    probabilidade_quantil_desc >= quantile_6(2) & probabilidade_quantil_desc < quantile_6(3) ~ '3º',
+                                    probabilidade_quantil_desc >= quantile_6(3) & probabilidade_quantil_desc < quantile_6(4) ~ '4º',
+                                    probabilidade_quantil_desc >= quantile_6(4) & probabilidade_quantil_desc < quantile_6(5) ~ '5º',
+                                    probabilidade_quantil_desc > quantile_6(5) ~ '6º'
+           ) %>%
+             as_factor() %>% 
+             forcats::fct_relevel("1º","2º","3º","4º","5º","6º")) %>%
+    group_by(quantil_desc ,bucket_photos) %>% 
+    mutate(min_characters = min(product_description_lenght),
+           max_characters = max(product_description_lenght)) %>% 
+    tail(1)
+  )
+  
+  simulated_bucket_photos <- reactive(
+    simulated() %>% pull(bucket_photos)
+  )
+  
+  simulated_quantil_desc <- reactive(
+    simulated() %>% pull(quantil_desc)
+  )
+  
+  best_bucket_photos <- reactive(
+    df_solution_2() %>% 
+    arrange(-prop_quantity) %>%
+    head(1) %>% 
+    pull(bucket_photos)
+  )
+  
+  best_quantil_desc <- reactive(
+    df_solution_2() %>% 
+    arrange(-prop_quantity) %>%
+    head(1) %>% 
+    pull(quantil_desc)
+  )
+  
+  best_min_caracters_desc <- reactive(
+    df_solution_2() %>% 
+    arrange(-prop_quantity) %>%
+    head(1) %>% 
+    pull(min_caracters_desc)
+  )
+  
+  best_max_caracters_desc <- reactive(
+    df_solution_2() %>% 
+    arrange(-prop_quantity) %>%
+    head(1) %>% 
+    pull(max_caracters_desc)
+  )
+  
+  simulated_prop_quantity <- reactive(
+    df_solution_2() %>% 
+    filter(bucket_photos == simulated_bucket_photos(),quantil_desc == simulated_quantil_desc()) %>%
+    pull(prop_quantity)
+  )
+  
+  best_prop_quantity <- reactive(
+    df_solution_2() %>% 
+    arrange(-prop_quantity) %>%
+    head(1) %>% 
+    pull(prop_quantity)
+  )
+  
+  estimated_increase_quantity <- reactive(
+    (best_prop_quantity() - simulated_prop_quantity())/simulated_prop_quantity()
+  )
+  
+  estimated_freight_gain_quantity <- reactive(
+    input$frete * 2 * estimated_increase_quantity()
+  )
+  
+  simulated_prop_sales <- reactive(
+    df_solution_2() %>% 
+    filter(bucket_photos == simulated_bucket_photos(),quantil_desc == simulated_quantil_desc()) %>%
+    pull(prop_sales)
+  )
+  
+  
+  best_prop_sales <- reactive(
+    df_solution_2() %>% 
+    arrange(-prop_sales) %>%
+    head(1) %>% 
+    pull(prop_sales)
+  )
+  
+  
+  estimated_increase_sales <- reactive(
+    (best_prop_sales() - simulated_prop_sales())/simulated_prop_sales()
+  )
+  
+  estimated_freight_gain_sales <- reactive(
+    input$frete * 2 * estimated_increase_sales()
+    )
   
   
   
@@ -1136,6 +1310,250 @@ server <- function(input, output, session){
                coord_flip() +
                labs(x = "Meio de pagamento", y = "Tamanho do Mercado") +
                theme(legend.position = "none"),tooltip = "text")
+  )
+  
+# announcement ----------------------------------------------------------------------------------------------------
+  
+  output$header_announcement <- renderValueBox(
+    valueBox(paste("Análise das variáveis do anúncio", input$new_category_name),subtitle = NULL, icon = NULL,
+             color = "blue"
+    )
+  )
+  
+  output$announcement_qnt1 <- renderPlotly(
+    ggplotly(ggplot(data = df_photos(),
+                    aes(x = bucket_photos,
+                        y = percent_notas,
+                        fill = review_simple,
+                        text = paste(scales::percent(percent_notas,.01),"\n",
+                                     "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                                     number_products," Produtos",
+                                     sep = ""))) +
+               geom_bar(stat = "identity",
+                        position = "fill") +
+               scale_fill_manual(values = c("steelblue","red")) +
+               scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+               geom_text(aes(label = scales::percent(percent_notas,accuracy = .1)),
+                         position = position_stack(vjust = 0.5)) +
+               labs(x = 'Quantidade de fotos',y = 'Porcentagem',fill = "Nota"),
+             tooltip = "text")
+  )
+  
+  output$announcement_qnt2 <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_quantile_desc(),
+             aes(x = quantil_desc,
+                 y = percent_notas,
+                 fill = review_simple,
+                 text = paste(scales::percent(percent_notas,.01),"\n",
+                              "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                              number_products," Produtos","\n",
+                              "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                              sep = ""))) +
+        geom_bar(stat = "identity",
+                 position = "fill") +
+        scale_fill_manual(values = c("steelblue","red")) +
+        scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+        geom_text(aes(label = scales::percent(percent_notas,accuracy = .1)),
+                  position = position_stack(vjust = 0.5)) +
+        labs(x = 'Quantidade de caracteres',y = 'Porcentagem',fill = "Nota"),
+      tooltip = "text")
+  )
+  
+  output$announcement_sales1 <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_photos(),
+             aes(x = bucket_photos,
+                 y = percent_sales,
+                 fill = review_simple,
+                 text = paste(scales::percent(percent_sales,.01),"\n",
+                              "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                              number_products," Produtos",
+                              sep = ""))) +
+        geom_bar(stat = "identity",
+                 position = "fill") +
+        scale_fill_manual(values = c("steelblue","red")) +
+        scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+        geom_text(aes(label = scales::percent(percent_sales,accuracy = .1)),
+                  position = position_stack(vjust = 0.5)) +
+        labs(x = 'Quantidade de fotos',y = 'Porcentagem',fill = "Nota"),
+      tooltip = "text")
+  )
+  
+  
+  output$announcement_sales2 <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_quantile_desc(),
+             aes(x = quantil_desc,
+                 y = percent_sales,
+                 fill = review_simple,
+                 text = paste(scales::percent(percent_sales,.01),"\n",
+                              "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                              number_products," Produtos","\n",
+                              "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                              sep = ""))) +
+        geom_bar(stat = "identity",
+                 position = "fill") +
+        scale_fill_manual(values = c("steelblue","red")) +
+        scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+        geom_text(aes(label = scales::percent(percent_sales,accuracy = .1)),
+                  position = position_stack(vjust = 0.5)) +
+        labs(x = 'Quantidade de caracteres',y = 'Porcentagem',fill = "Nota"),
+      tooltip = "text"
+    )
+  )
+
+  
+  
+
+# simulator -------------------------------------------------------------------------------------------------------
+  
+  output$header_simulator <- renderValueBox(
+    valueBox(paste("Simulador da", input$new_category_name),subtitle = NULL, icon = NULL,
+             color = "blue"
+    )
+  )
+  
+  output$simulator_qnt1 <- renderPlotly(
+    plot_ly(data = df_solution_2(),
+            x = ~bucket_photos,y = ~quantil_desc,z = ~prop_quantity,type = "heatmap",colors = colorRamp(c("white", "steelblue")),
+            text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                          "Quantil de caracteres: ",quantil_desc,"\n",
+                          "Porcentagem de notas altas: ",scales::percent(prop_quantity),"\n",
+                          "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                          "Numero de produtos: ",total_number_products ,"\n",
+                          "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                          sep = "")
+    )  %>% 
+      layout(xaxis = list(title = 'Quantidade de fotos'),
+             yaxis = list(title = 'Quantil de caracteres')) %>% 
+      colorbar(title = "% notas altas")
+  )
+  
+  output$simulator_qnt2 <- renderPlotly(
+    plot_ly(data = df_solution_2(),
+            x = ~bucket_photos,y = ~quantil_desc,z = ~total_number_products ,size = ~total_number_products ,
+            marker = list(color = ~prop_quantity,
+                          symbol = 'circle',
+                          sizemode = 'diameter',
+                          showscale = TRUE,
+                          scalesize = .5,
+                          colorscale = list(c(0, 1), c("white", "steelblue")),
+                          colorbar = list(title = "% notas altas")),
+            text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                          "Quantil de caracteres: ",quantil_desc,"\n",
+                          "Porcentagem de notas altas: ",scales::percent(prop_quantity),"\n",
+                          "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                          "Numero de produtos: ",total_number_products ,"\n",
+                          "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                          sep = ""),
+            hoverinfo = 'text'
+    ) %>%
+      layout(scene = list(xaxis = list(title = 'Quantidade de fotos'),
+                          yaxis = list(title = 'Quantil de caracteres'),
+                          zaxis = list(title = 'Numero de produtos')))
+    
+  )
+  
+  output$current_situation_quantity <- renderText(
+    paste0(
+            "Você está usando ",
+             simulated_bucket_photos(),
+             " fotos e seu anúncio se encaixa no ",
+             simulated_quantil_desc(),
+             " quantil em termos de caracteres, sua aprovação estimada é de ",
+             scales::percent(
+               simulated_prop_quantity()
+             )
+           )
+  )
+  
+  
+  output$possible_situation_quantity <- renderText(
+      paste0(
+        "Você deveria usar ",
+        best_bucket_photos(),
+        " fotos e manter a descrição do produto entre ",
+        best_min_caracters_desc(),
+        " e ",
+        best_max_caracters_desc(),
+        " caracteres podendo aumentar sua aprovação para ",
+        scales::percent(best_prop_quantity()),
+        " um aumento de ",
+        scales::percent(estimated_increase_quantity()),
+        " reduzindo o seu custo por produto em até ",reais(estimated_freight_gain_quantity())
+      )
+  )
+  
+  output$simulator_sales1 <- renderPlotly(
+    plot_ly(data = df_solution_2(),
+            x = ~bucket_photos,y = ~quantil_desc,z = ~prop_sales,type = "heatmap",colors = colorRamp(c("white", "steelblue")),
+            text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                          "Quantil de caracteres: ",quantil_desc,"\n",
+                          "Porcentagem de notas altas: ",scales::percent(prop_sales),"\n",
+                          "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                          "Numero de produtos: ",total_number_products ,"\n",
+                          "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                          sep = ""),
+            hoverinfo = "text") %>% 
+      layout(xaxis = list(title = 'Quantidade de fotos'),
+             yaxis = list(title = 'Quantil de caracteres')) %>% 
+      colorbar(title = "Porcentagem")
+  )
+  
+  output$simulator_sales2 <- renderPlotly(
+    plot_ly(data = df_solution_2(),
+            x= ~bucket_photos,y = ~quantil_desc,z = ~gross_sales1,size = ~gross_sales1,
+            marker = list(color = ~prop_quantity,
+                          symbol = 'circle',
+                          sizemode = 'diameter',
+                          showscale = TRUE,
+                          scalesize = .5,
+                          colorscale = list(c(0, 1), c("white", "steelblue")),
+                          colorbar = list(len = .25,title = "% notas alta")),
+            text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                          "Quantil de caracteres: ",quantil_desc,"\n",
+                          "Porcentagem de notas altas: ",scales::percent(prop_sales),"\n",
+                          "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                          "Numero de produtos: ",total_number_products ,"\n",
+                          "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                          sep = ""),
+            hoverinfo = 'text'
+    ) %>% 
+      layout(scene = list(xaxis = list(title = 'Quantidade de fotos'),
+                          yaxis = list(title = 'Quantil de caracteres'),
+                          zaxis = list(title = 'Tamanho do mercado (reais)')))
+    
+  )
+  
+  output$current_situation_sales <- renderText(
+    paste0(
+      "Você está usando ",
+      simulated_bucket_photos(),
+      " fotos e seu anúncio se encaixa no ",
+      simulated_quantil_desc(),
+      " quantil em termos de caracteres, sua aprovação estimada é de ",
+      scales::percent(
+        simulated_prop_sales()
+      )
+    )
+  )
+  
+  
+  output$possible_situation_sales <- renderText(
+    paste0(
+      "Você deveria usar ",
+      best_bucket_photos(),
+      " fotos e manter a descrição do produto entre ",
+      best_min_caracters_desc(),
+      " e ",
+      best_max_caracters_desc(),
+      " caracteres podendo aumentar sua aprovação para ",
+      scales::percent(best_prop_sales()),
+      " um aumento de ",
+      scales::percent(estimated_increase_sales()),
+      " reduzindo o seu custo por produto em até ",reais(estimated_freight_gain_sales())
+    )
   )
   
 }
