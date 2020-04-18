@@ -82,6 +82,10 @@ df_orders_itens_reviews_payments_products_customer <- df_orders_itens_reviews_pa
 
 theme_set(new = theme_minimal())
 
+
+# functions -------------------------------------------------------------------------------------------------------
+
+
 reais <-  scales::label_dollar(prefix = "R$",big.mark = ".",decimal.mark = ",")
 k_reais <- scales::label_dollar(scale = 1/1000,
                                 prefix = "R$",
@@ -103,6 +107,12 @@ real_log <- trans_new(name = "real_log",
                         format = reais)
 
 '%!in%' <- function(x,y)!('%in%'(x,y))
+
+quantile_maker <- function(quantile_number,precision,position){
+  (10^precision/quantile_number)*position
+}
+
+quantile_6 <- partial(quantile_maker,6,4)
 
 # shiny structure ------------------------------------------------------------------------------------------------------
 
@@ -142,12 +152,15 @@ sidebar <- dashboardSidebar(sidebarMenu(
     tabName = "payment_methods",
     icon = icon("money-check")
   ),
-  sliderInput(
-    "number",
-    NULL,
-    value = 10,
-    min = 1,
-    max = 20
+  menuItem(
+    "Anúncio",
+    tabName = "announcement",
+    icon = icon("bullhorn")
+  ),
+  menuItem(
+    "Simulador",
+    tabName = "simulator",
+    icon = icon("edit")
   ),
   radioButtons(
     "var",
@@ -160,14 +173,24 @@ sidebar <- dashboardSidebar(sidebarMenu(
               choices = setNames(df_orders_itens_reviews_payments_products_customer$Region %>%
                                    unique(),
                                  c("Sudeste","Nordeste","Centro-Oeste","Sul","Norte")),
-              multiple = TRUE,selected = 'Southeast',selectize = T),
-  textInput("new_category_name","Nome da nova categoria",value = "casa_nova"),
+              multiple = TRUE,
+              #selected = 'Southeast',
+              selected = c("Southeast","Northeast","Center West","South","North"),
+              selectize = T),
+  textInput("new_category_name",
+            "Nome da nova categoria",
+            #value = "casa_nova"
+            value = "cama_mesa_banho"
+            ),
   selectInput("category_name",
               "Categorias",
               choices = df_orders_itens_reviews_payments_products_customer$product_category_name %>% unique(),
-              multiple = TRUE,selected = c('cama_mesa_banho',
-                                           'moveis_decoracao',
-                                           'moveis_escritorio'),selectize = T),
+              multiple = TRUE,
+              selected = c('cama_mesa_banho'),
+              # selected = c('cama_mesa_banho',
+              #                              'moveis_decoracao',
+              #                              'moveis_escritorio'),
+              selectize = T),
   sliderInput("range", "Preços",round = TRUE,
               min = min(df_orders_itens_reviews_payments_products_customer$total_price),
               max = max(df_orders_itens_reviews_payments_products_customer$total_price),
@@ -229,8 +252,15 @@ body <- dashboardBody(
                          )
                        )
       ),
-      fluidRow(DTOutput(outputId = "dt_table"))
-      
+      fluidRow(DTOutput(outputId = "dt_table")),
+      sliderInput(
+        "number",
+        label = "Top n",
+        value = 10,
+        min = 1,
+        max = 20
+      )
+
     ),
     
 # pies -----------------------------------------------------------------------------------------------------------------
@@ -325,7 +355,30 @@ body <- dashboardBody(
                 column(width = 6,plotlyOutput("payment_methods_sales2"))
               )
             )
-    )
+    ),
+
+
+
+# announcement -----------------------------------------------------------------------------------------------------
+
+    tabItem(tabName = "announcement",
+            fluidRow(valueBoxOutput(outputId = "header_announcement",width = 12)),
+            conditionalPanel(
+              condition = "input.var == 'number_products'",
+              fluidRow(
+                column(width = 6, plotlyOutput("announcement_qnt1")),
+                column(width = 6, plotlyOutput("announcement_qnt2"))
+              )
+            ),
+            conditionalPanel(
+              condition = "input.var == 'total_gross_sale'",
+              fluidRow(
+                column(width = 6,plotlyOutput("announcement_sales1")),
+                column(width = 6,plotlyOutput("announcement_sales2"))
+              )
+            )
+    ),
+
   )
 )
 
@@ -506,6 +559,24 @@ server <- function(input, output, session){
            prop_sales = gross_sales/sum(gross_sales)) %>% 
     ungroup())
   
+  df_solution <- reactive(df_created_category() %>% 
+    mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1 foto",
+                                     product_photos_qty >= 2 & product_photos_qty <=3 ~ "2-3 fotos",
+                                     product_photos_qty >= 4 & product_photos_qty <=5 ~ "4-5 fotos",
+                                     product_photos_qty >= 6 ~ "6+ fotos"),
+           probabilidade_quantil_desc = product_description_lenght %>% ntile(10000),
+           quantil_desc = case_when(
+             probabilidade_quantil_desc < quantile_6(1) ~ '1º',
+             probabilidade_quantil_desc >= quantile_6(1) & probabilidade_quantil_desc < quantile_6(2) ~ '2º',
+             probabilidade_quantil_desc >= quantile_6(2) & probabilidade_quantil_desc < quantile_6(3) ~ '3º',
+             probabilidade_quantil_desc >= quantile_6(3) & probabilidade_quantil_desc < quantile_6(4) ~ '4º',
+             probabilidade_quantil_desc >= quantile_6(4) & probabilidade_quantil_desc < quantile_6(5) ~ '5º',
+             probabilidade_quantil_desc > quantile_6(5) ~ '6º'
+           ) %>%
+             as_factor() %>% 
+             forcats::fct_relevel("1º","2º","3º","4º","5º","6º"))
+  )
+  
   
   
 # server outputs -------------------------------------------------------------------------------------------------------
@@ -525,8 +596,12 @@ server <- function(input, output, session){
              total_gross_sale = k_reais(total_gross_sale),
              mean_price = reais(mean_price),
       ),
+    escape = FALSE,
+    server = FALSE,
     options = list(
-      dom = 'Bfrtip', buttons = c('copy', 'excel', 'pdf', 'print', 'colvis')
+      dom = 't',
+      buttons = c('copy', 'excel', 'pdf', 'print', 'colvis'),
+      columnDefs = list(list(type = 'natural', targets = 6))
     ),
     extensions = c('Buttons',"Responsive")
   )
