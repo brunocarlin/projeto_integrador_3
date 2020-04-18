@@ -5,9 +5,9 @@ account: carlin
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1979723
-bundleId: 2934000
+bundleId: 3030343
 url: https://carlin.shinyapps.io/projeto_integrador_3/
-when: 1585345382.7216
+when: 1587194845.72786
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .RData|comeco_heat_map.R|example_shiny_2.R|grafico_categoria.png|grafico_qt_itens.png|import_explore.R|plot_brasil_quantidade_compras.png|plot_categorias_notas.png|plot_dist_price.png|plot_meio_de_pagamento.png|plot_price_quartil.png|plot_price.png|plot_qt_itens.png|plot_region_2 (2).png|plot_region_perc.png|README.md|Rplot.png|Rplot01.png|Rplot02.png|shinny_quick.R|shiny example.R|to_present.R|data/amazon/Musical_Instruments_5.json|data/amazon/ratings_Musical_Instruments.csv
+ignoredFiles: comeco_heat_map.R|example_shiny_2.R|import_explore.R|README.md|shinny_quick.R|to_present.R|photos

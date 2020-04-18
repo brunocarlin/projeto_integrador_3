@@ -211,7 +211,8 @@ br_maps <- brazilmaps::get_brmap("State")
 
 br_sigla <- readxl::read_excel('table_brazil.xlsx')
 
-br_maps_2 <- br_maps %>% 
+br_maps_2 <- br_maps %>%
+  as.data.frame() %>% 
   left_join(br_sigla %>% mutate(Estado = Estado %>% str_to_upper),by = c("nome" ="Estado")) %>% 
   rename(customer_state = Sigla)
 # join customer -----------------------------------------------------------
@@ -264,7 +265,7 @@ df_state <-  df_orders_itens_reviews_payments_products_customer %>%
          nome = Estado %>% str_to_upper(),
          prop_gross = gross_sales/sum(gross_sales),
          label_prod = paste(scales::percent(prop,2),
-                            n_orders)) %>% 
+                            n_orders))
 
 
 br_maps_3 <- br_maps_2 %>% 
@@ -412,3 +413,359 @@ df_to_plot %>%
   scale_fill_distiller(palette = 'PuBu',trans = "reverse") +
   labs(x = "Meio de pagamento",y = 'Quantidade de meios de pagamento',fill = "Quantidade de compras") +
   theme(text = element_text(size = 16))
+
+# testing variables -------------------------------------------------------
+
+quantile_maker <- function(quantile_number,precision,position){
+  (10^precision/quantile_number)*position
+}
+
+quantile_6 <- partial(quantile_maker,6,4)
+
+df_solution <- df_casa_nova_cust_sudeste %>% 
+  mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1",
+                                   product_photos_qty >= 2 & product_photos_qty <=3 ~ "2-3",
+                                   product_photos_qty >= 4 & product_photos_qty <=5 ~ "4-5",
+                                   product_photos_qty >= 6 ~ "6+"),
+         probabilidade_quantil_desc = product_description_lenght %>% ntile(10000),
+         quantil_desc = case_when(probabilidade_quantil_desc < quantile_6(1) ~ '1º',
+                             probabilidade_quantil_desc >= quantile_6(1) & probabilidade_quantil_desc < quantile_6(2) ~ '2º',
+                             probabilidade_quantil_desc >= quantile_6(2) & probabilidade_quantil_desc < quantile_6(3) ~ '3º',
+                             probabilidade_quantil_desc >= quantile_6(3) & probabilidade_quantil_desc < quantile_6(4) ~ '4º',
+                             probabilidade_quantil_desc >= quantile_6(4) & probabilidade_quantil_desc < quantile_6(5) ~ '5º',
+                             probabilidade_quantil_desc > quantile_6(5) ~ '6º'
+         ) %>%
+           as_factor() %>% 
+           forcats::fct_relevel("1º","2º","3º","4º","5º","6º")) 
+
+
+
+
+# photos ----------------------------------------------------------------------------------------------------------
+
+df_photos <- df_solution %>% 
+  group_by(bucket_photos,review_simple) %>%
+  summarise(total_gross_sale = sum(total_price,na.rm = T),
+            mean_price = mean(total_price,na.rm = T),
+            number_products = n()) %>% 
+  group_by(bucket_photos) %>%
+  mutate(percent_notas = number_products/sum(number_products),
+         percent_sales = total_gross_sale/sum(total_gross_sale)) %>%
+  ungroup() 
+
+photos_quantity <- df_photos %>% 
+  ggplot(aes(x = bucket_photos,
+             y = percent_notas,
+             fill = review_simple,
+             text = paste(scales::percent(percent_notas,.01),"\n",
+                          "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                          number_products," Produtos",
+                          sep = ""))) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_notas,accuracy = .1)),
+            position = position_stack(vjust = 0.5)) +
+  labs(x = 'Quantidade de fotos',y = 'Porcentagem',fill = "Nota")
+
+ggplotly(photos_quantity,tooltip = "text")
+
+
+
+photos_sales <- ggplotly(
+  ggplot(data = df_photos,
+         aes(x = bucket_photos,
+             y = percent_sales,
+             fill = review_simple,
+             text = paste(scales::percent(percent_sales,.01),"\n",
+                          "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                          number_products," Produtos",
+                          sep = ""))) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_sales,accuracy = .1)),
+            position = position_stack(vjust = 0.5)) +
+  labs(x = 'Quantidade de fotos',y = 'Porcentagem',fill = "Nota"),
+  tooltip = "text")
+
+
+# quantiles -------------------------------------------------------------------------------------------------------
+
+df_quantile_desc <- df_solution %>% 
+  group_by(quantil_desc,review_simple) %>%
+  summarise(total_gross_sale = sum(total_price,na.rm = T),
+            mean_price = mean(total_price,na.rm = T),
+            number_products = n(),
+            min_caracters_desc = min(product_description_lenght),
+            max_caracters_desc = max(product_description_lenght)) %>% 
+  group_by(quantil_desc) %>%
+  mutate(percent_notas = number_products/sum(number_products),
+         percent_sales = total_gross_sale/sum(total_gross_sale)) %>%
+  ungroup()
+
+
+
+
+quantile_desc_qnty <- ggplotly(
+  ggplot(data = df_quantile_desc,
+         aes(x = quantil_desc,
+             y = percent_notas,
+             fill = review_simple,
+             text = paste(scales::percent(percent_notas,.01),"\n",
+                          "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                          number_products," Produtos","\n",
+                          "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                          sep = ""))) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_notas,accuracy = .1)),
+            position = position_stack(vjust = 0.5)) +
+  labs(x = 'Quantidade de caracteres',y = 'Porcentagem',fill = "Nota"),
+  tooltip = "text")
+
+
+quantile_desc_sales <- ggplotly(
+  ggplot(data = df_quantile_desc,
+         aes(x = quantil_desc,
+             y = percent_sales,
+             fill = review_simple,
+             text = paste(scales::percent(percent_sales,.01),"\n",
+                          "Tamanho do mercado ",k_reais(total_gross_sale),"\n",
+                          number_products," Produtos","\n",
+                          "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                          sep = ""))) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_fill_manual(values = c("steelblue","red")) +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = scales::percent(percent_sales,accuracy = .1)),
+            position = position_stack(vjust = 0.5)) +
+  labs(x = 'Quantidade de caracteres',y = 'Porcentagem',fill = "Nota"),
+  tooltip = "text"
+  )
+
+# heatmap ---------------------------------------------------------------------------------------------------------
+
+df_solution_2 <- df_solution %>% 
+  group_by(bucket_photos,quantil_desc,review_simple) %>%
+  summarise(total_gross_sale = sum(total_price,na.rm = T),
+            number_products = n(),
+            total_caracters_desc = sum(product_description_lenght),
+            min_caracters_desc = min(product_description_lenght),
+            max_caracters_desc= max(product_description_lenght)) %>% 
+  mutate(multiplier = if_else(review_simple == "alta",1,0)) %>% 
+  group_by(bucket_photos,quantil_desc) %>%
+  summarise(gross_sales1 = sum(total_gross_sale),
+            total_number_products = sum(number_products),
+            prop_quantity = sum(number_products * multiplier)/total_number_products,
+            prop_sales = sum(total_gross_sale * multiplier)/gross_sales1,
+            mean_caracters_desc = sum(total_caracters_desc)/total_number_products,
+            min_caracters_desc = min(min_caracters_desc) + 1,
+            max_caracters_desc= max(max_caracters_desc)) %>% 
+  ungroup()
+
+
+
+heatmap_quantity <- 
+  plot_ly(data = df_solution_2,
+          x= ~bucket_photos,y = ~quantil_desc,z = ~prop_quantity,type = "heatmap",colors = colorRamp(c("white", "steelblue")),
+          text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                        "Quantil de caracteres: ",quantil_desc,"\n",
+                        "Porcentagem de notas altas: ",scales::percent(prop_quantity),"\n",
+                        "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                        "Numero de produtos: ",total_number_products ,"\n",
+                        "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                        sep = "")
+          )  %>% 
+  layout(xaxis = list(title = 'Quantidade de fotos'),
+         yaxis = list(title = 'Quantil de caracteres')) %>% 
+  colorbar(title = "Porcentagem")
+
+heatmap_quantity
+
+heatmap_sales <- 
+  plot_ly(data = df_solution_2,
+          x= ~bucket_photos,y = ~quantil_desc,z = ~prop_sales,type = "heatmap",colors = colorRamp(c("white", "steelblue")),
+          text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                        "Quantil de caracteres: ",quantil_desc,"\n",
+                        "Porcentagem de notas altas: ",scales::percent(prop_sales),"\n",
+                        "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                        "Numero de produtos: ",total_number_products ,"\n",
+                        "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                        sep = ""),
+          hoverinfo = "text") %>% 
+  layout(xaxis = list(title = 'Quantidade de fotos'),
+         yaxis = list(title = 'Quantil de caracteres')) %>% 
+  colorbar(title = "Porcentagem")
+
+heatmap_sales
+
+
+
+# scatters 3d -----------------------------------------------------------------------------------------------------
+
+
+scatter_3d_quantity <- 
+  plot_ly(data = df_solution_2,
+          x= ~bucket_photos,y = ~quantil_desc,z = ~total_number_products ,size = ~total_number_products ,
+          marker = list(color = ~prop_quantity,
+                        symbol = 'circle',
+                        sizemode = 'diameter',
+                        showscale = TRUE,
+                        scalesize = .5,
+                        colorscale = list(c(0, 1), c("white", "steelblue")),
+                        colorbar = list(len = .25,title = "% notas altas")),
+          text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                        "Quantil de caracteres: ",quantil_desc,"\n",
+                        "Porcentagem de notas altas: ",scales::percent(prop_quantity),"\n",
+                        "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                        "Numero de produtos: ",total_number_products ,"\n",
+                        "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                        sep = ""),
+          hoverinfo = 'text'
+  ) %>%
+  layout(scene = list(xaxis = list(title = 'Quantidade de fotos'),
+                      yaxis = list(title = 'Quantil de caracteres'),
+                      zaxis = list(title = 'Numero de produtos')))
+  
+scatter_3d_quantity
+
+scatter_3d_sales <-
+  plot_ly(data = df_solution_2,
+          x= ~bucket_photos,y = ~quantil_desc,z = ~gross_sales1,size = ~gross_sales1,
+          marker = list(color = ~prop_quantity,
+                        symbol = 'circle',
+                        sizemode = 'diameter',
+                        showscale = TRUE,
+                        scalesize = .5,
+                        colorscale = list(c(0, 1), c("white", "steelblue")),
+                        colorbar = list(len = .25,title = "% notas alta")),
+          text = ~paste("Quantidade de fotos: ",bucket_photos,"\n",
+                        "Quantil de caracteres: ",quantil_desc,"\n",
+                        "Porcentagem de notas altas: ",scales::percent(prop_sales),"\n",
+                        "Tamanho do Mercado: ",k_reais(gross_sales1),"\n",
+                        "Numero de produtos: ",total_number_products ,"\n",
+                        "De ",min_caracters_desc," caracteres ate ",max_caracters_desc," caracteres",
+                        sep = ""),
+          hoverinfo = 'text'
+  ) %>% 
+  layout(scene = list(xaxis = list(title = 'Quantidade de fotos'),
+                      yaxis = list(title = 'Quantil de caracteres'),
+                      zaxis = list(title = 'Tamanho do mercado (reais)')))
+  
+scatter_3d_sales
+
+# simulation ------------------------------------------------------------------------------------------------------
+
+
+
+caracteres <- 500
+fotos <- 6
+frete <- 10
+
+simulated <- df_solution %>% 
+  select(product_photos_qty,product_description_lenght) %>% 
+  add_row(product_photos_qty = fotos,product_description_lenght = caracteres) %>%
+  mutate(bucket_photos = case_when(product_photos_qty == 1 ~ "1",
+                                   product_photos_qty >= 2 & product_photos_qty <=3 ~ "2-3",
+                                   product_photos_qty >= 4 & product_photos_qty <=5 ~ "4-5",
+                                   product_photos_qty >= 6 ~ "6+"),
+         probabilidade_quantil_desc = product_description_lenght %>% ntile(10000),
+         quantil_desc = case_when(probabilidade_quantil_desc < quantile_6(1) ~ '1º',
+                                  probabilidade_quantil_desc >= quantile_6(1) & probabilidade_quantil_desc < quantile_6(2) ~ '2º',
+                                  probabilidade_quantil_desc >= quantile_6(2) & probabilidade_quantil_desc < quantile_6(3) ~ '3º',
+                                  probabilidade_quantil_desc >= quantile_6(3) & probabilidade_quantil_desc < quantile_6(4) ~ '4º',
+                                  probabilidade_quantil_desc >= quantile_6(4) & probabilidade_quantil_desc < quantile_6(5) ~ '5º',
+                                  probabilidade_quantil_desc > quantile_6(5) ~ '6º'
+         ) %>%
+           as_factor() %>% 
+           forcats::fct_relevel("1º","2º","3º","4º","5º","6º")) %>%
+  group_by(quantil_desc ,bucket_photos) %>% 
+  mutate(min_characters = min(product_description_lenght),
+         max_characters = max(product_description_lenght)) %>% 
+  tail(1)
+
+
+simulated_bucket_photos <- simulated %>% pull(bucket_photos)
+simulated_quantil_desc <- simulated %>% pull(quantil_desc)
+
+best_bucket_photos <- df_solution_2 %>% 
+  arrange(-prop_quantity) %>%
+  head(1) %>% 
+  pull(bucket_photos)
+
+best_quantil_desc <- df_solution_2 %>% 
+  arrange(-prop_quantity) %>%
+  head(1) %>% 
+  pull(quantil_desc)
+
+best_min_caracters_desc <- df_solution_2 %>% 
+  arrange(-prop_quantity) %>%
+  head(1) %>% 
+  pull(min_caracters_desc)
+
+best_max_caracters_desc <- df_solution_2 %>% 
+  arrange(-prop_quantity) %>%
+  head(1) %>% 
+  pull(max_caracters_desc)
+
+
+
+simulated_prop_quantity <- df_solution_2 %>% 
+  filter(bucket_photos == simulated_bucket_photos,quantil_desc == simulated_quantil_desc) %>%
+  pull(prop_quantity)
+
+
+best_prop_quantity <- df_solution_2 %>% 
+  arrange(-prop_quantity) %>%
+  head(1) %>% 
+  pull(prop_quantity)
+
+estimated_increase_quantity <- (best_prop_quantity - simulated_prop_quantity)/simulated_prop_quantity
+
+estimated_freight_gain_quantity <- frete * 2 * estimated_increase_quantity
+
+simulated_prop_sales <- df_solution_2 %>% 
+  filter(bucket_photos == simulated_bucket_photos,quantil_desc == simulated_quantil_desc) %>%
+  pull(prop_sales)
+
+
+best_prop_sales <- df_solution_2 %>% 
+  arrange(-prop_sales) %>%
+  head(1) %>% 
+  pull(prop_sales)
+
+
+estimated_increase_sales <- (best_prop_sales - simulated_prop_sales)/simulated_prop_sales
+
+estimated_freight_gain_sales <- frete * 2 * estimated_increase_sales
+
+
+current_situation_quantity <- paste0("Você está usando ",
+                        simulated_bucket_photos,
+                        " fotos e seu anúncio se encaixa no ",
+                        simulated_quantil_desc,
+                        " quantil em termos de caracteres, sua aprovação estimada é de ",
+                        scales::percent(simulated_prop_quantity))
+
+
+possible_situation_quantity <-
+  paste0(
+    "Você deveria usar ",
+    best_bucket_photos,
+    " fotos e manter a descrição do produto entre ",
+    best_min_caracters_desc,
+    " e ",
+    best_max_caracters_desc,
+    " podendo aumentar sua aprovação para ",
+    scales::percent(best_prop_quantity),
+    " um aumento de ",
+    scales::percent(estimated_increase_quantity),
+    " reduzindo o seu custo por produto em até ",reais(estimated_freight_gain_quantity)
+    )
+possible_situation_quantity
